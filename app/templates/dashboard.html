@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% from "macros.html" import wallet_card, stats_row %}
+{% block title %}Inicio — Finanzas{% endblock %}
+{% block topbar_title %}Resumen{% endblock %}
+{% block content %}
+
+{% if data.alerts %}
+<div class="alerts">
+  {% for a in data.alerts %}
+  <div class="alert alert-{{ a.type }}">{{ a.message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<section class="section">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">Mis tarjetas</h2>
+      <p class="section-desc">{{ data.cards | length }} activas · ${{ "{:,.0f}".format(data.total_balance) }} en deuda</p>
+    </div>
+    <a href="/tarjetas" class="btn btn-ghost btn-sm">Gestionar</a>
+  </div>
+  <div class="wallet">
+    {% for c in data.cards %}
+    {{ wallet_card(c.name, c.balance | currency, c.credit_line | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section">
+  {{ stats_row(data.total_balance, data.total_available, data.total_line, data.usage_pct) }}
+</section>
+
+<section class="grid-2-1 section">
+  {% if data.latest_patrimony %}
+  <div class="hero-card">
+    <div class="hero-label">Patrimonio neto · {{ data.latest_patrimony.label }}</div>
+    <div class="hero-value" data-count="{{ data.latest_patrimony.net_worth }}" data-prefix="$">$0</div>
+    {% if data.net_change is not none %}
+    <div class="hero-change {% if data.net_change >= 0 %}up{% else %}down{% endif %}">
+      {% if data.net_change >= 0 %}↑{% else %}↓{% endif %}
+      ${{ "{:,.0f}".format(data.net_change | abs) }} vs mes anterior
+    </div>
+    {% endif %}
+    <a href="/patrimonio" class="hero-link">Ver patrimonio →</a>
+  </div>
+  {% else %}
+  <div class="hero-card">
+    <div class="hero-label">Deuda en tarjetas</div>
+    <div class="hero-value">{{ data.total_balance | currency }}</div>
+  </div>
+  {% endif %}
+
+  <div class="panel health-panel">
+    <div class="panel-title">Salud crediticia</div>
+    <div class="health-ring-wrap">
+      <canvas id="healthRing"></canvas>
+      <div class="health-ring-center">
+        <div class="health-score">{{ data.health.score }}</div>
+        <div class="health-label {{ data.health.color }}">{{ data.health.label }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="grid-2 section">
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">Saldo por tarjeta</div>
+    </div>
+    <div class="chart-box"><canvas id="cardsChart"></canvas></div>
+  </div>
+
+  {% if data.patrimony %}
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">Evolución patrimonial</div>
+      <a href="/patrimonio" class="btn btn-ghost btn-sm">Detalle</a>
+    </div>
+    <div class="chart-box"><canvas id="patChart"></canvas></div>
+  </div>
+  {% else %}
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Insights</div></div>
+    {% for ins in data.insights %}
+    <div class="insight">
+      <div class="insight-title">{{ ins.title }}</div>
+      <div class="insight-text">{{ ins.text }}</div>
+    </div>
+    {% else %}
+    <p class="text-muted">Todo en orden.</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% if data.patrimony or data.insights or data.other_expenses %}
+<section class="grid-2-1 section">
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Insights</div></div>
+    {% for ins in data.insights %}
+    <div class="insight">
+      <div class="insight-title">{{ ins.title }}</div>
+      <div class="insight-text">{{ ins.text }}</div>
+    </div>
+    {% else %}
+    <p class="text-muted">Sin alertas por ahora.</p>
+    {% endfor %}
+    <form action="/importar" method="post" class="sync-form">
+      <button type="submit" class="btn btn-secondary btn-sm btn-block">Sincronizar desde Excel</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Otros movimientos</div></div>
+    {% if data.other_expenses %}
+    {% for e in data.other_expenses %}
+    <div class="cat-row">
+      <span class="cat-name">{{ e.name }}</span>
+      <span class="cat-val {% if e.amount < 0 %}text-bad{% else %}text-good{% endif %}">{{ e.amount | currency }}</span>
+    </div>
+    {% endfor %}
+    <div class="cat-row cat-total">
+      <span>Total</span>
+      <span class="{% if data.other_total < 0 %}text-bad{% endif %}">{{ data.other_total | currency }}</span>
+    </div>
+    {% else %}
+    <p class="text-muted">Sin otros movimientos.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const health = {{ data.health.score }};
+initAnimatedChart(document.getElementById('healthRing'), () => {
+  const ctx = document.getElementById('healthRing').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 150, 150);
+  grad.addColorStop(0, '#4f46e5');
+  grad.addColorStop(1, '#0891b2');
+  return {
+    type: 'doughnut',
+    data: { datasets: [{ data: [health, 100 - health], backgroundColor: [grad, donutTrackColor()], borderWidth: 0 }] },
+    options: { ...donutDefaults(), cutout: '82%' },
+  };
+}, { immediate: true });
+
+const cards = {{ data.cards | tojson }};
+initAnimatedChart(document.getElementById('cardsChart'), () => ({
+  type: 'bar',
+  data: {
+    labels: cards.map(c => c.name),
+    datasets: [{
+      label: 'Saldo',
+      data: cards.map(c => c.balance),
+      backgroundColor: cards.map(c => c.usage_pct >= 80 ? '#dc2626' : c.usage_pct >= 60 ? '#d97706' : '#4f46e5'),
+      borderRadius: 8,
+      barPercentage: 0.55,
+    }]
+  },
+  options: { ...chartDefaults(), plugins: { ...chartDefaults().plugins, legend: { display: false } } },
+}));
+
+const pat = {{ data.patrimony | tojson }};
+if (pat.length && document.getElementById('patChart')) {
+  initAnimatedChart(document.getElementById('patChart'), () => ({
+    type: 'line',
+    data: {
+      labels: pat.map(p => p.label.split(' ')[0]),
+      datasets: [{
+        label: 'Patrimonio neto',
+        data: pat.map(p => p.net_worth),
+        borderColor: '#4f46e5',
+        backgroundColor: 'rgba(79,70,229,0.08)',
+        fill: true, tension: 0.35,
+        pointRadius: 3, pointBackgroundColor: '#4f46e5',
+        borderWidth: 2,
+      }]
+    },
+    options: chartDefaults(),
+  }));
+}
+</script>
+{% endblock %}

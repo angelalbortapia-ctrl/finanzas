@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "macros.html" import wallet_card, stats_row %}
+{% block title %}Tarjetas — Finanzas{% endblock %}
+{% block topbar_title %}Tarjetas de crédito{% endblock %}
+{% block content %}
+
+{{ stats_row(data.total_balance, data.total_available, data.total_line, data.usage_pct) }}
+
+<section class="section">
+  <div class="wallet-grid">
+    {% for c in cards %}
+    {{ wallet_card(c.name, c.balance | currency, c.credit_line | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
+    {% endfor %}
+  </div>
+</section>
+
+<div class="panel">
+  <div class="panel-head">
+    <div>
+      <div class="panel-title">Agregar tarjeta</div>
+      <div class="panel-desc">Registra una nueva línea de crédito</div>
+    </div>
+  </div>
+  <form action="/tarjetas/nueva" method="post" class="form-grid">
+    <div class="form-field">
+      <label>Banco / nombre</label>
+      <input name="name" required placeholder="Ej. BBVA">
+    </div>
+    <div class="form-field">
+      <label>Línea de crédito</label>
+      <input name="credit_line" type="number" step="0.01" required placeholder="50000">
+    </div>
+    <div class="form-field">
+      <label>Titular</label>
+      <select name="person_id" required>
+        {% for p in data.persons %}
+        <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-field">
+      <button type="submit" class="btn btn-primary btn-block">Agregar</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

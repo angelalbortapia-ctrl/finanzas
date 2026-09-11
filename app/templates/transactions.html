@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Movimientos — Finanzas{% endblock %}
+{% block topbar_title %}Movimientos{% endblock %}
+{% block content %}
+
+<div class="grid-2 mb">
+  <div class="panel">
+    <div class="panel-head">
+      <div><div class="panel-title">Nuevo movimiento</div><div class="panel-desc">Gasto, pago o ingreso</div></div>
+    </div>
+    <form action="/movimientos" method="post" class="form-grid">
+      <div class="form-field"><label>Fecha</label><input name="date" type="date" value="{{ today }}" required></div>
+      <div class="form-field"><label>Monto</label><input name="amount" type="number" step="0.01" required placeholder="0.00"></div>
+      <div class="form-field">
+        <label>Tipo</label>
+        <select name="type">
+          <option value="expense">Gasto</option>
+          <option value="payment">Pago</option>
+          <option value="income">Ingreso</option>
+        </select>
+      </div>
+      <div class="form-field"><label>Descripción</label><input name="description" placeholder="Supermercado"></div>
+      <div class="form-field"><label>Categoría</label><input name="category" placeholder="Gastos"></div>
+      <div class="form-field">
+        <label>Tarjeta</label>
+        <select name="card_id"><option value="">—</option>{% for c in cards %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+      </div>
+      <div class="form-field"><button type="submit" class="btn btn-primary btn-block">Registrar</button></div>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Resumen</div></div>
+    <div class="stat-mini-label">Movimientos registrados</div>
+    <div class="stat-mini-value accent">{{ transactions | length }}</div>
+    <p class="text-muted summary-note">Registra compras y pagos para ver en qué se va tu dinero.</p>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><div class="panel-title">Historial</div></div>
+  {% if transactions %}
+  <div class="timeline">
+    {% for t in transactions %}
+    <div class="tl-item">
+      <div class="tl-dot {{ t.type }}"></div>
+      <div class="tl-body">
+        <div class="tl-title">{{ t.description or 'Sin descripción' }}</div>
+        <div class="tl-meta">{{ t.date }} · {{ t.category or 'General' }}{% if t.card_name %} · {{ t.card_name }}{% endif %}</div>
+      </div>
+      <div class="tl-amount {{ t.type }}">
+        {% if t.type == 'expense' %}-{% else %}+{% endif %}{{ t.amount | currency }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty"><p>Aún no hay movimientos.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

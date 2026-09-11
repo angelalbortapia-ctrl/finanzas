@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Finanzas{% endblock %}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css?v=10">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a href="/" class="brand">
+        <div class="brand-icon">F</div>
+        <div>
+          <div class="brand-name">Finanzas</div>
+          <div class="brand-sub">Panel personal</div>
+        </div>
+      </a>
+      <nav class="nav">
+        <a href="/" class="{% if page == 'dashboard' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Inicio
+        </a>
+        <a href="/tarjetas" class="{% if page == 'cards' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+          Tarjetas
+        </a>
+        <a href="/patrimonio" class="{% if page == 'patrimony' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+          Patrimonio
+        </a>
+        <a href="/movimientos" class="{% if page == 'transactions' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+          Movimientos
+        </a>
+      </nav>
+      {% set nw = latest_net_worth() %}
+      {% if nw %}
+      <div class="sidebar-widget">
+        <div class="sidebar-widget-label">Patrimonio neto</div>
+        <div class="sidebar-widget-value">{{ nw | currency }}</div>
+      </div>
+      {% endif %}
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <div class="topbar-greeting"><span id="greeting">Hola</span>, {{ user_name }}</div>
+          <div class="topbar-title">{% block topbar_title %}Dashboard{% endblock %}</div>
+        </div>
+        <div class="topbar-date" id="today-date"></div>
+      </header>
+
+      <div class="content">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+
+  <nav class="mobile-nav">
+    <a href="/" class="{% if page == 'dashboard' %}active{% endif %}">Inicio</a>
+    <a href="/tarjetas" class="{% if page == 'cards' %}active{% endif %}">Tarjetas</a>
+    <a href="/patrimonio" class="{% if page == 'patrimony' %}active{% endif %}">Patrimonio</a>
+    <a href="/movimientos" class="{% if page == 'transactions' %}active{% endif %}">Movs</a>
+  </nav>
+
+  <script src="/static/charts.js?v=6"></script>
+  <script src="/static/app.js?v=7"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
