@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% block title %}Terminal BMV — Finanzas{% endblock %}
+{% block page_title %}Terminal de mercados{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/terminal.css?v=34">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+{% endblock %}
+{% block content %}
+
+{% if request.query_params.get('saved') %}
+<div class="bb-flash ok">✓ Posición guardada</div>
+{% elif request.query_params.get('deleted') %}
+<div class="bb-flash ok">✓ Posición eliminada</div>
+{% elif request.query_params.get('refreshed') %}
+<div class="bb-flash ok">✓ Precios actualizados</div>
+{% elif request.query_params.get('imported') %}
+<div class="bb-flash ok">✓ Portafolio importado desde Excel</div>
+{% elif request.query_params.get('synced') %}
+<div class="bb-flash ok">✓ Sincronizado con Google Sheets</div>
+{% elif request.query_params.get('error') == 'prices' %}
+<div class="bb-flash err">No se pudieron actualizar los precios. Revisa tu conexión.</div>
+{% elif request.query_params.get('error') == 'holding' %}
+<div class="bb-flash err">Error al guardar posición{% if request.query_params.get('msg') %}: {{ request.query_params.get('msg') }}{% endif %}</div>
+{% elif request.query_params.get('error') == 'import' %}
+<div class="bb-flash err">No se pudo importar Excel{% if request.query_params.get('msg') %}: {{ request.query_params.get('msg') }}{% endif %}</div>
+{% elif request.query_params.get('error') == 'sync' %}
+<div class="bb-flash err">Error al sincronizar{% if request.query_params.get('msg') %}: {{ request.query_params.get('msg') }}{% endif %}</div>
+{% endif %}
+
+{% set term = data.terminal if data.terminal is defined else {} %}
+{% set snap = data.snapshot %}
+
+<div class="bb-shell" id="bbTerminal"
+     data-symbol="{{ term.default_symbol or 'IPC' }}"
+     data-catalog-count="{{ term.catalog_count or 0 }}">
+
+  <header class="bb-topbar">
+    <span class="bb-logo">TERMINAL <span>· BMV</span></span>
+    <div class="bb-cmd-wrap">
+      <input type="text" class="bb-cmd" id="bbCommand" placeholder="GFNORTEO · IPC · WALMEX" autocomplete="off" spellcheck="false">
+      <span class="bb-cmd-hint">/</span>
+      <div class="bb-cmd-results" id="bbCmdResults"></div>
+    </div>
+
+    <div class="bb-fx" id="bbFx"><span class="bb-fx-label">Cargando FX…</span></div>
+
+    <div class="bb-clock">
+      <div class="bb-market-status {{ term.market.status if term.market else 'closed' }}" id="bbMarketStatus">
+        {{ term.market.label if term.market else '—' }}
+      </div>
+      <div id="bbClock">{{ term.market.time_mx if term.market else '' }} CDMX</div>
+    </div>
+  </header>
+
+  <div class="bb-ticker" id="bbTicker">
+    <div class="bb-ticker-track" id="bbTickerTrack"></div>
+  </div>
+
+  <div class="bb-indices-strip" id="bbIndicesStrip" hidden>
+    <div class="bb-indices-strip-inner" id="bbIndicesStripInner"></div>
+  </div>
+
+  <div class="bb-fx-strip" id="bbFxStrip" hidden>
+    <div class="bb-fx-strip-inner" id="bbFxStripInner"></div>
+  </div>
+
+  <nav class="bb-workspace-tabs" role="tablist" aria-label="Vista del terminal">
+    <button type="button" class="bb-ws-tab active" data-workspace="market" role="tab" aria-selected="true">Mercado</button>
+    <button type="button" class="bb-ws-tab" data-workspace="indices" role="tab" aria-selected="false">Índices</button>
+    <button type="button" class="bb-ws-tab" data-workspace="fx" role="tab" aria-selected="false">Divisas</button>
+    <button type="button" class="bb-ws-tab" data-workspace="portfolio" role="tab" aria-selected="false">Mis posiciones</button>
+    <div class="bb-ws-actions">
+      <button type="button" class="bb-tool-btn" id="bbLayoutBtn" title="Arrastra los bordes para cambiar tamaños">Ajustar</button>
+      <button type="button" class="bb-tool-btn bb-layout-reset" id="bbLayoutReset" hidden>Reset</button>
+    </div>
+  </nav>
+
+  <div class="bb-main bb-view-market" id="bbGrid">
+    <aside class="bb-panel bb-watch">
+      <div class="bb-panel-head">
+        <h2 id="bbWatchTitle">Watchlist</h2>
+        <span class="bb-head-meta" id="bbWatchMeta">{{ term.catalog_count or 0 }} emisoras</span>
+      </div>
+      <input type="text" class="bb-watch-search" id="bbWatchSearch" placeholder="Buscar símbolo...">
+      <div class="bb-watch-tabs bb-watch-tabs-market" id="bbWatchTabsMarket">
+        <button type="button" class="bb-watch-tab active" data-board="all">Todo</button>
+        <button type="button" class="bb-watch-tab" data-board="bmv">BMV</button>
+        <button type="button" class="bb-watch-tab" data-board="biva">BIVA</button>
+        <button type="button" class="bb-watch-tab" data-board="sic">SIC</button>
+        <button type="button" class="bb-watch-tab" data-board="us">EE.UU.</button>
+        <button type="button" class="bb-watch-tab" data-board="eu">Europa</button>
+      </div>
+      <div class="bb-watch-tabs bb-watch-tabs-indices" id="bbWatchTabsIndices" hidden>
+        <button type="button" class="bb-watch-tab active" data-board="all">Todo</button>
+        <button type="button" class="bb-watch-tab" data-board="mx">México</button>
+        <button type="button" class="bb-watch-tab" data-board="us">EE.UU.</button>
+        <button type="button" class="bb-watch-tab" data-board="eu">Europa</button>
+        <button type="button" class="bb-watch-tab" data-board="asia">Asia</button>
+        <button type="button" class="bb-watch-tab" data-board="latam">LatAm</button>
+      </div>
+      <div class="bb-watch-tabs bb-watch-tabs-fx" id="bbWatchTabsFx" hidden>
+        <button type="button" class="bb-watch-tab active" data-board="all">Todo</button>
+        <button type="button" class="bb-watch-tab" data-board="mxn">Peso MX</button>
+        <button type="button" class="bb-watch-tab" data-board="majors">Mayores</button>
+        <button type="button" class="bb-watch-tab" data-board="cross">Cruzados</button>
+        <button type="button" class="bb-watch-tab" data-board="idx">Índices</button>
+      </div>
+      <div class="bb-panel-body" id="bbWatchlist"></div>
+    </aside>
+
+    <div class="bb-resize-handle bb-resize-col" id="bbResizeWatch" title="Ancho watchlist"></div>
+
+    <section class="bb-panel bb-chart-area">
+      <div class="bb-panel-head bb-chart-head">
+        <h2>Gráfica</h2>
+        <div class="bb-symbol-block bb-symbol-block--compact" id="bbSymbolBlock">
+          <span class="bb-symbol-name" id="bbSymName">{{ term.default_symbol or 'IPC' }}</span>
+          <span class="bb-symbol-price" id="bbSymPrice">—</span>
+          <span class="bb-symbol-chg" id="bbSymChg"></span>
+        </div>
+      </div>
+      <div class="bb-chart-toolbar">
+        <div class="bb-toolbar-row">
+          <span class="bb-toolbar-label">Navegar</span>
+          <div class="bb-chart-nav">
+            <button type="button" class="bb-tool-btn" id="bbChartPanL" title="Ver fechas anteriores (←)">◀</button>
+            <button type="button" class="bb-tool-btn" id="bbChartPanR" title="Ver fechas recientes (→)">▶</button>
+            <button type="button" class="bb-tool-btn" id="bbChartZoomOut" title="Alejar / más historia (−)">−</button>
+            <button type="button" class="bb-tool-btn" id="bbChartZoomIn" title="Acercar (+)">+</button>
+            <button type="button" class="bb-tool-btn" id="bbChartGoStart" title="Ir al inicio (Home)">Inicio</button>
+            <button type="button" class="bb-tool-btn" id="bbChartGoEnd" title="Ir al presente (End)">Hoy</button>
+            <button type="button" class="bb-tool-btn" id="bbChartFit" title="Ver todo el periodo (F)">⊡</button>
+          </div>
+          <span class="bb-chart-range" id="bbChartRange"></span>
+        </div>
+        <div class="bb-toolbar-row">
+          <span class="bb-toolbar-label">Periodo</span>
+          <div class="bb-periods" id="bbPeriods">
+            <button type="button" class="bb-period" data-period="1d" data-key="1">1D</button>
+            <button type="button" class="bb-period" data-period="5d" data-key="2">5D</button>
+            <button type="button" class="bb-period" data-period="1mo" data-key="3">1M</button>
+            <button type="button" class="bb-period" data-period="3mo" data-key="4">3M</button>
+            <button type="button" class="bb-period active" data-period="6mo" data-key="5">6M</button>
+            <button type="button" class="bb-period" data-period="1y" data-key="6">1A</button>
+            <button type="button" class="bb-period" data-period="2y" data-key="7">2A</button>
+            <button type="button" class="bb-period" data-period="5y" data-key="8">5A</button>
+            <button type="button" class="bb-period" data-period="10y" data-key="9">10A</button>
+            <button type="button" class="bb-period bb-period-max" data-period="max" data-key="0">MAX</button>
+          </div>
+        </div>
+        <div class="bb-toolbar-row">
+          <span class="bb-toolbar-label">Tipo</span>
+          <div class="bb-chart-types" id="bbChartTypes">
+            <button type="button" class="bb-tool-btn active" data-chart-type="candle" title="Velas japonesas">Velas</button>
+            <button type="button" class="bb-tool-btn" data-chart-type="line" title="Línea de cierre">Línea</button>
+            <button type="button" class="bb-tool-btn" data-chart-type="area" title="Área de cierre">Área</button>
+          </div>
+        </div>
+        <div class="bb-toolbar-row">
+          <span class="bb-toolbar-label">Indicadores</span>
+          <div class="bb-chart-tools">
+            <button type="button" class="bb-tool-btn active" id="bbToggleMA" title="Medias móviles 20/50">MA</button>
+            <button type="button" class="bb-tool-btn" id="bbToggleBB" title="Bandas de Bollinger">BB</button>
+            <button type="button" class="bb-tool-btn" id="bbToggleRSI" title="RSI 14">RSI</button>
+            <button type="button" class="bb-tool-btn" id="bbToggleLog" title="Escala logarítmica">Log</button>
+            <button type="button" class="bb-tool-btn" id="bbCompareBtn" title="C=vs IPC · Shift+C o clic derecho = varios">vs IPC</button>
+            <button type="button" class="bb-tool-btn active" id="bbToggleDiv" title="Marcar pagos de dividendo">Div</button>
+          </div>
+        </div>
+      </div>
+      <div class="bb-chart-stack">
+        <div class="bb-chart-container" id="bbChartWrap">
+          <div id="bbChartStatus" class="bb-chart-status"></div>
+          <div id="bbChart"></div>
+          <div class="bb-chart-hint">Arrastra para mover · Rueda para zoom · ← → para navegar</div>
+        </div>
+        <div class="bb-resize-handle bb-resize-row" id="bbResizeChart" title="Alto volumen"></div>
+        <div id="bbVolChart"></div>
+        <div class="bb-chart-container bb-rsi-wrap" id="bbRsiWrap" style="display:none"><div id="bbRsiChart" style="height:60px"></div></div>
+      </div>
+    </section>
+
+    <div class="bb-resize-handle bb-resize-col" id="bbResizeInfo" title="Ancho panel info"></div>
+
+    <aside class="bb-panel bb-info-panel">
+      <div class="bb-info-split">
+        <section class="bb-info-section bb-info-news">
+          <div class="bb-pane-subhead">
+            <span>Noticias</span>
+            <span id="bbNewsTag" class="bb-head-meta">MX</span>
+          </div>
+          <div class="bb-panel-body" id="bbNews"></div>
+        </section>
+        <div class="bb-resize-handle bb-resize-row" id="bbResizeNews" title="Alto noticias vs detalle"></div>
+        <section class="bb-info-section bb-info-detail">
+          <div class="bb-pane-subhead"><span>Detalle · cotización</span></div>
+          <div class="bb-panel-body bb-detail-body">
+            <div class="bb-detail-hero">
+              <div class="bb-detail-name" id="bbDetailName">{{ term.default_symbol or 'IPC' }}</div>
+              <div class="bb-detail-desc" id="bbSymDesc">—</div>
+              <div class="bb-detail-price-row">
+                <span class="bb-detail-price" id="bbDetailPrice">—</span>
+                <span class="bb-detail-chg" id="bbDetailChg"></span>
+              </div>
+            </div>
+            <div class="bb-stats bb-stats--detail" id="bbStats">
+              <div class="bb-stat"><div class="bb-stat-label">Apertura</div><div class="bb-stat-val" id="stOpen">—</div></div>
+              <div class="bb-stat"><div class="bb-stat-label">Máximo</div><div class="bb-stat-val" id="stHigh">—</div></div>
+              <div class="bb-stat"><div class="bb-stat-label">Mínimo</div><div class="bb-stat-val" id="stLow">—</div></div>
+              <div class="bb-stat"><div class="bb-stat-label">Cierre ant.</div><div class="bb-stat-val" id="stPrev">—</div></div>
+              <div class="bb-stat"><div class="bb-stat-label">Volumen</div><div class="bb-stat-val" id="stVol">—</div></div>
+              <div class="bb-stat"><div class="bb-stat-label">52 sem</div><div class="bb-stat-val" id="st52">—</div></div>
+              <div class="bb-stat"><div class="bb-stat-label">Div. yield</div><div class="bb-stat-val" id="stDivYield">—</div></div>
+              <div class="bb-stat"><div class="bb-stat-label">Ex-div</div><div class="bb-stat-val" id="stDivEx">—</div></div>
+            </div>
+          </div>
+        </section>
+        <details class="bb-info-calendar-wrap">
+          <summary>Calendario económico</summary>
+          <div class="bb-panel-body" id="bbCalendar">
+            {% for ev in term.calendar or [] %}
+            <div class="bb-cal-item bb-cal-impact-{{ ev.impact }}">
+              <div class="bb-cal-date">{{ ev.date[5:].replace('-','/') }}</div>
+              <div class="bb-cal-event">{{ ev.event }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
+    </aside>
+
+    <section class="bb-panel bb-portfolio-panel">
+      <div class="bb-pane-subhead">
+        <span>Mi portafolio · P&amp;L en vivo</span>
+        <div class="bb-head-actions">
+          <form action="/inversiones/importar" method="post" class="inline-form"><button type="submit" class="bb-tool-btn">Excel</button></form>
+          <a href="/exportar/portafolio.csv" class="bb-tool-btn">CSV</a>
+          <button type="button" class="bb-tool-btn" id="bbAddPosBtn">+ Posición</button>
+        </div>
+      </div>
+      <div class="bb-port-strip" id="bbPortStrip">
+        {% if snap %}
+        <div class="bb-port-item"><span>Valor</span><strong id="psValue">{{ snap.market_value | currency }}</strong></div>
+        <div class="bb-port-item"><span>P&amp;L bruto</span><strong id="psPnl" class="{% if snap.pnl >= 0 %}up{% else %}down{% endif %}">{{ snap.pnl | currency }}</strong></div>
+        <div class="bb-port-item"><span>P&amp;L neto</span><strong id="psNet" class="{% if (snap.net_pnl or 0) >= 0 %}up{% else %}down{% endif %}">{{ (snap.net_pnl or 0) | currency }}</strong></div>
+        <div class="bb-port-item"><span>Pos.</span><strong>{{ data.holdings | length }}</strong></div>
+        {% else %}
+        <div class="bb-port-item"><span>Sin posiciones</span><strong>—</strong></div>
+        {% endif %}
+      </div>
+      <div class="bb-panel-body bb-port-body-full" id="bbPortBody">
+        <table class="bb-port-table" id="bbPortTable">
+          <thead>
+            <tr>
+              <th>Ticker</th><th>Emisora</th><th class="num">Tít.</th>
+              <th class="num">Costo</th><th class="num">Precio</th><th class="num">Valor</th>
+              <th class="num">P&amp;L</th><th class="num">Neto</th>
+            </tr>
+          </thead>
+          <tbody id="bbPortRows">
+            {% for h in data.holdings or [] %}
+            <tr data-symbol="{{ h.ticker.replace('BMV:', '') }}">
+              <td>{{ h.ticker.replace('BMV:', '') }}</td>
+              <td>{{ h.name[:24] }}</td>
+              <td class="num">{{ h.shares }}</td>
+              <td class="num">{{ h.avg_cost | currency }}</td>
+              <td class="num">{{ h.market_price | currency }}</td>
+              <td class="num">{{ h.market_value | currency }}</td>
+              <td class="num {% if h.pnl >= 0 %}up{% else %}down{% endif %}">{{ h.pnl | currency }}</td>
+              <td class="num {% if h.net_pnl >= 0 %}up{% else %}down{% endif %}">{{ h.net_pnl | currency }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="bb-kbd-overlay" id="bbPosModal">
+  <div class="bb-kbd-card" style="max-width:420px">
+    <h3>Agregar posición</h3>
+    <form action="/inversiones/posicion" method="post" class="form-grid" style="grid-template-columns:1fr 1fr;gap:.5rem">
+      <div class="field"><label>Ticker</label><input name="ticker" required placeholder="GFNORTEO"></div>
+      <div class="field"><label>Emisora</label><input name="name" placeholder="Banorte"></div>
+      <div class="field"><label>Títulos</label><input name="shares" type="number" step="any" required></div>
+      <div class="field"><label>Costo prom.</label><input name="avg_cost" type="number" step="0.01" required></div>
+      <div class="field" style="grid-column:span 2;display:flex;gap:.4rem">
+        <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="bbPosClose">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="bb-kbd-overlay" id="bbKbdHelp">
+  <div class="bb-kbd-card">
+    <h3>Atajos de teclado</h3>
+    <dl>
+      <dt>/ o Ctrl+K</dt><dd>Buscar símbolo</dd>
+      <dt>Enter</dt><dd>Cargar símbolo</dd>
+      <dt>Esc</dt><dd>Cerrar / limpiar</dd>
+      <dt>1 – 9, 0</dt><dd>Periodo (0 = MAX histórico)</dd>
+      <dt>← →</dt><dd>Navegar histórico</dd>
+      <dt>Home / End</dt><dd>Inicio / Hoy en la gráfica</dd>
+      <dt>+ / −</dt><dd>Zoom gráfica</dd>
+      <dt>F</dt><dd>Ver todo el periodo cargado</dd>
+      <dt>C / Shift+C</dt><dd>Comparar vs IPC / varios símbolos</dd>
+      <dt>M</dt><dd>Toggle medias móviles</dd>
+      <dt>G</dt><dd>Vista Mercado (gráfica)</dd>
+      <dt>I</dt><dd>Vista Índices</dd>
+      <dt>X</dt><dd>Vista Divisas</dd>
+      <dt>P</dt><dd>Vista Mis posiciones</dd>
+      <dt>L</dt><dd>Modo ajustar paneles</dd>
+      <dt>?</dt><dd>Ayuda</dd>
+    </dl>
+    <button type="button" class="bb-tool-btn" style="margin-top:.6rem" id="bbKbdClose">Cerrar</button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/terminal.js?v=34"></script>
+<script src="/static/terminal-layout.js?v=34"></script>
+<script>
+const BB_INIT = {
+  symbol: {{ (data.terminal.default_symbol if data.terminal is defined else 'IPC') | tojson }},
+  catalogCount: {{ (data.terminal.catalog_count if data.terminal is defined else 0) | tojson }},
+  holdings: {{ (data.holdings or []) | tojson }},
+};
+(function boot() {
+  if (typeof initBloombergTerminal !== 'function') return;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initBloombergTerminal(BB_INIT));
+  } else {
+    initBloombergTerminal(BB_INIT);
+  }
+})();
+</script>
+{% endblock %}

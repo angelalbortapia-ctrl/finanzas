@@ -1,15 +1,15 @@
 const C = {
-  text: '#94a3b8',
-  grid: 'rgba(0,0,0,0.06)',
-  accent: '#4f46e5',
-  good: '#059669',
-  bad: '#dc2626',
-  tooltipBg: '#ffffff',
-  tooltipTitle: '#0f172a',
-  tooltipBody: '#475569',
-  tooltipBorder: '#e2e8f0',
-  legend: '#475569',
-  donutTrack: 'rgba(0,0,0,0.06)',
+  text: '#6d7788',
+  grid: 'rgba(42,49,64,0.8)',
+  accent: '#d4a853',
+  good: '#34d399',
+  bad: '#f87171',
+  tooltipBg: '#1c222d',
+  tooltipTitle: '#eef1f6',
+  tooltipBody: '#b4bcc9',
+  tooltipBorder: '#2a3140',
+  legend: '#6d7788',
+  donutTrack: 'rgba(42,49,64,0.9)',
 };
 
 window.__charts = [];
@@ -24,8 +24,8 @@ function chartDefaults() {
       legend: {
         labels: {
           color: C.legend,
-          font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' },
-          padding: 14, usePointStyle: true, boxWidth: 8,
+          font: { family: 'Manrope', size: 11, weight: '600' },
+          padding: 12, usePointStyle: true, boxWidth: 8,
         },
       },
       tooltip: {
@@ -35,7 +35,6 @@ function chartDefaults() {
         borderColor: C.tooltipBorder,
         borderWidth: 1,
         padding: 12, cornerRadius: 10,
-        titleFont: { family: 'Plus Jakarta Sans', weight: '700' },
       },
     },
     scales: {
@@ -49,7 +48,7 @@ function chartDefaults() {
           color: C.text, font: { size: 10 },
           callback: v => '$' + Number(v).toLocaleString(),
         },
-        grid: { color: C.grid },
+        grid: { color: C.grid, drawTicks: false },
         border: { display: false },
       },
     },
@@ -60,49 +59,36 @@ function donutDefaults() {
   return {
     responsive: true,
     maintainAspectRatio: false,
-    cutout: '76%',
-    animation: { animateRotate: true, duration: 1200, easing: 'easeOutQuart' },
+    cutout: '72%',
+    animation: { animateRotate: true, duration: 1000 },
     plugins: { legend: { display: false }, tooltip: chartDefaults().plugins.tooltip },
   };
 }
 
-function donutTrackColor() {
-  return C.donutTrack;
-}
-
 function initAnimatedChart(canvas, buildConfig, opts = {}) {
   if (!canvas || typeof Chart === 'undefined') return null;
-
-  const wrap = canvas.closest('.chart-box, .chart-box-lg, .health-ring-wrap') || canvas.parentElement;
+  const wrap = canvas.closest('.chart, .chart-lg') || canvas.parentElement;
   let chart = null;
 
   const create = () => {
     if (chart) return chart;
-    const config = buildConfig();
-    chart = new Chart(canvas, config);
-    canvas._chartInstance = chart;
+    chart = new Chart(canvas.getContext('2d'), buildConfig());
     window.__charts.push(chart);
-    wrap?.classList.remove('chart-pending');
-    wrap?.classList.add('chart-visible');
     return chart;
   };
 
-  if (opts.immediate) return create();
+  if (opts.immediate) { create(); return chart; }
 
-  wrap?.classList.add('chart-pending');
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
+  const obs = new IntersectionObserver(entries => {
+    if (entries.some(e => e.isIntersecting)) {
       create();
-    });
-  }, { threshold: 0.2 });
+      obs.disconnect();
+    }
+  }, { threshold: 0.15 });
 
-  observer.observe(wrap || canvas);
-  const rect = (wrap || canvas).getBoundingClientRect();
-  if (rect.top < window.innerHeight) {
-    observer.disconnect();
-    create();
-  }
-  return null;
+  if (wrap && wrap.getBoundingClientRect().top < window.innerHeight) create();
+  else if (wrap) obs.observe(wrap);
+  else create();
+
+  return chart;
 }

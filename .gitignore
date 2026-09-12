@@ -3,7 +3,9 @@ __pycache__/
 .env
 .env.*
 finanzas.db
+google-credentials.json
 .venv/
 venv/
 .url
 .DS_Store
+.pydeps/

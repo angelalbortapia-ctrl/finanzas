@@ -1,61 +1,113 @@
 {% extends "base.html" %}
 {% block title %}Movimientos — Finanzas{% endblock %}
-{% block topbar_title %}Movimientos{% endblock %}
+{% block page_title %}Movimientos{% endblock %}
 {% block content %}
 
-<div class="grid-2 mb">
-  <div class="panel">
-    <div class="panel-head">
-      <div><div class="panel-title">Nuevo movimiento</div><div class="panel-desc">Gasto, pago o ingreso</div></div>
-    </div>
-    <form action="/movimientos" method="post" class="form-grid">
-      <div class="form-field"><label>Fecha</label><input name="date" type="date" value="{{ today }}" required></div>
-      <div class="form-field"><label>Monto</label><input name="amount" type="number" step="0.01" required placeholder="0.00"></div>
-      <div class="form-field">
-        <label>Tipo</label>
-        <select name="type">
-          <option value="expense">Gasto</option>
-          <option value="payment">Pago</option>
-          <option value="income">Ingreso</option>
-        </select>
-      </div>
-      <div class="form-field"><label>Descripción</label><input name="description" placeholder="Supermercado"></div>
-      <div class="form-field"><label>Categoría</label><input name="category" placeholder="Gastos"></div>
-      <div class="form-field">
-        <label>Tarjeta</label>
-        <select name="card_id"><option value="">—</option>{% for c in cards %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
-      </div>
-      <div class="form-field"><button type="submit" class="btn btn-primary btn-block">Registrar</button></div>
-    </form>
-  </div>
+{% if request.query_params.get('saved') %}
+<div class="hint reveal">✓ Movimiento guardado. El saldo de la tarjeta se actualizó automáticamente.</div>
+{% endif %}
+{% if request.query_params.get('updated') %}
+<div class="hint reveal">✓ Movimiento actualizado. Los saldos se recalcularon.</div>
+{% endif %}
+{% if request.query_params.get('deleted') %}
+<div class="hint reveal">✓ Movimiento eliminado. El saldo de la tarjeta se revirtió.</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="hint reveal" style="background:var(--bad-soft);color:var(--bad)">No se encontró el movimiento.</div>
+{% endif %}
 
-  <div class="panel">
-    <div class="panel-head"><div class="panel-title">Resumen</div></div>
-    <div class="stat-mini-label">Movimientos registrados</div>
-    <div class="stat-mini-value accent">{{ transactions | length }}</div>
-    <p class="text-muted summary-note">Registra compras y pagos para ver en qué se va tu dinero.</p>
-  </div>
+<div class="stats reveal">
+  <div class="stat"><div class="stat-label">Registrados</div><div class="stat-val">{{ transactions | length }}</div></div>
+  <div class="stat"><div class="stat-label">Tarjetas</div><div class="stat-val">{{ cards | length }}</div></div>
+  <div class="stat"><div class="stat-label">Último</div><div class="stat-val" style="font-size:1rem">{{ transactions[0].date if transactions else '—' }}</div></div>
 </div>
 
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Historial</div></div>
-  {% if transactions %}
-  <div class="timeline">
-    {% for t in transactions %}
-    <div class="tl-item">
-      <div class="tl-dot {{ t.type }}"></div>
-      <div class="tl-body">
-        <div class="tl-title">{{ t.description or 'Sin descripción' }}</div>
-        <div class="tl-meta">{{ t.date }} · {{ t.category or 'General' }}{% if t.card_name %} · {{ t.card_name }}{% endif %}</div>
-      </div>
-      <div class="tl-amount {{ t.type }}">
-        {% if t.type == 'expense' %}-{% else %}+{% endif %}{{ t.amount | currency }}
+<div class="split reveal">
+  <div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">Nuevo movimiento</div></div>
+      <div class="card-body">
+        <p style="font-size:.78rem;color:var(--muted);margin-bottom:1rem">
+          Los <strong>gastos</strong> suman al saldo de la tarjeta. Los <strong>pagos</strong> lo reducen.
+        </p>
+        <form action="/movimientos" method="post" class="form-grid">
+          <div class="field"><label>Fecha</label><input name="date" type="date" value="{{ today }}" required></div>
+          <div class="field"><label>Monto</label><input name="amount" type="number" step="0.01" min="0.01" required></div>
+          <div class="field"><label>Tipo</label><select name="type"><option value="expense">Gasto</option><option value="payment">Pago</option></select></div>
+          <div class="field"><label>Descripción</label><input name="description" placeholder="Supermercado"></div>
+          <div class="field"><label>Categoría</label><input name="category" placeholder="Gastos"></div>
+          <div class="field"><label>Tarjeta</label><select name="card_id"><option value="">—</option>{% for c in cards %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+          <div class="field"><button type="submit" class="btn btn-primary btn-block">Registrar</button></div>
+        </form>
       </div>
     </div>
-    {% endfor %}
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">Historial</div></div>
+      <div class="card-body flush">
+        {% if transactions %}
+        <table class="tbl tbl-actions">
+          <thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Tarjeta</th><th class="num">Monto</th><th></th></tr></thead>
+          <tbody>
+            {% for t in transactions %}
+            <tr>
+              <td><span class="sym">{{ t.date }}</span></td>
+              <td>{{ t.description or '—' }}<br><span class="sub">{{ t.category or 'General' }}</span></td>
+              <td><span class="sub">{{ 'Gasto' if t.type == 'expense' else 'Pago' if t.type == 'payment' else t.type }}</span></td>
+              <td><span class="sub">{{ t.card_name or '—' }}</span></td>
+              <td class="num {% if t.type == 'expense' %}bad{% else %}good{% endif %}">{% if t.type == 'expense' %}-{% else %}+{% endif %}{{ t.amount | currency }}</td>
+              <td class="row-actions">
+                <button type="button" class="btn btn-ghost btn-sm tx-edit-btn" data-tx="{{ t | tojson | e }}">Editar</button>
+                <form action="/movimientos/{{ t.id }}/eliminar" method="post" class="inline-form" onsubmit="return confirm('¿Eliminar este movimiento? Se revertirá el saldo de la tarjeta.')">
+                  <button type="submit" class="btn btn-ghost btn-sm bad-text">Borrar</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty"><p>Aún no hay movimientos. Empieza aquí para dejar el Excel.</p></div>
+        {% endif %}
+      </div>
+    </div>
   </div>
-  {% else %}
-  <div class="empty"><p>Aún no hay movimientos.</p></div>
-  {% endif %}
+
+  <aside>
+    <div class="card" id="tx-edit-panel" hidden>
+      <div class="card-head"><div class="card-title">Editar movimiento</div></div>
+      <div class="card-body">
+        <form id="tx-edit-form" method="post" class="form-grid">
+          <div class="field"><label>Fecha</label><input name="date" type="date" required></div>
+          <div class="field"><label>Monto</label><input name="amount" type="number" step="0.01" min="0.01" required></div>
+          <div class="field"><label>Tipo</label><select name="type"><option value="expense">Gasto</option><option value="payment">Pago</option></select></div>
+          <div class="field"><label>Descripción</label><input name="description"></div>
+          <div class="field"><label>Categoría</label><input name="category"></div>
+          <div class="field"><label>Tarjeta</label><select name="card_id" id="tx-edit-card"><option value="">—</option>{% for c in cards %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>
+          <div class="field" style="display:flex;gap:.5rem">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <button type="button" class="btn btn-ghost" id="tx-edit-cancel">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">Navegación</div></div>
+      <div class="card-body">
+        <nav class="link-list">
+          <a href="/">Inicio</a>
+          <a href="/tarjetas">Tarjetas</a>
+          <a href="/inversiones">Inversiones</a>
+          <a href="/simulador">Simulador</a>
+        </nav>
+      </div>
+    </div>
+  </aside>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+initTransactionEditor();
+</script>
 {% endblock %}

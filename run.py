@@ -3,6 +3,9 @@ import os
 import socket
 import subprocess
 import sys
+import threading
+import time
+import urllib.request
 import webbrowser
 from pathlib import Path
 
@@ -19,6 +22,8 @@ def ensure_deps():
         import fastapi  # noqa: F401
         import uvicorn  # noqa: F401
         import openpyxl  # noqa: F401
+        import fpdf  # noqa: F401
+        import yfinance  # noqa: F401
     except ImportError:
         print("Instalando dependencias...")
         subprocess.check_call(
@@ -45,6 +50,16 @@ def kill_port(port: int):
         pass
 
 
+def kill_stale_servers():
+    for port in range(PORT, PORT + 6):
+        kill_port(port)
+    for pattern in ("uvicorn.*app.main:app", "python3.*run.py"):
+        try:
+            subprocess.run(["pkill", "-f", pattern], check=False)
+        except FileNotFoundError:
+            pass
+
+
 def wait_port_free(port: int, timeout: float = 3.0):
     import time
     t0 = time.time()
@@ -57,8 +72,8 @@ def wait_port_free(port: int, timeout: float = 3.0):
 
 def pick_port() -> int:
     if port_in_use(PORT):
-        print(f"Puerto {PORT} ocupado — cerrando proceso anterior...")
-        kill_port(PORT)
+        print(f"Puerto {PORT} ocupado — cerrando procesos anteriores...")
+        kill_stale_servers()
         wait_port_free(PORT)
     if not port_in_use(PORT):
         return PORT
@@ -67,6 +82,23 @@ def pick_port() -> int:
             print(f"  (Puerto {PORT} no disponible, usando {p})")
             return p
     raise SystemExit(f"No hay puertos libres entre {PORT} y {PORT + 9}.")
+
+
+def open_browser_when_ready(url: str):
+    def _wait():
+        health = f"{url}/health"
+        for _ in range(40):
+            try:
+                with urllib.request.urlopen(health, timeout=1) as resp:
+                    if resp.status == 200:
+                        webbrowser.open(url)
+                        return
+            except Exception:
+                time.sleep(0.25)
+        print(f"\n  No se pudo abrir el navegador automáticamente.")
+        print(f"  Abre manualmente: {url}\n")
+
+    threading.Thread(target=_wait, daemon=True).start()
 
 
 if __name__ == "__main__":
@@ -86,6 +118,6 @@ if __name__ == "__main__":
     print()
 
     if os.environ.get("FINANZAS_OPEN_BROWSER", "1") == "1":
-        webbrowser.open(url)
+        open_browser_when_ready(url)
 
     uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=False)

@@ -1,92 +1,125 @@
 {% extends "base.html" %}
 {% block title %}Patrimonio — Finanzas{% endblock %}
-{% block topbar_title %}Patrimonio{% endblock %}
+{% block page_title %}Patrimonio{% endblock %}
 {% block content %}
 
-{% if data.patrimony %}
-{% set latest = data.patrimony[-1] %}
-<div class="grid-2-1 mb">
-  <div class="hero-card">
-    <div class="hero-label">Patrimonio neto · {{ latest.label }}</div>
-    <div class="hero-value" data-count="{{ latest.net_worth }}" data-prefix="$">$0</div>
+{% if request.query_params.get('closed') %}
+<div class="hint reveal">✓ Cierre de mes guardado. Snapshot con GBM en vivo y deuda real de tarjetas.</div>
+{% endif %}
+{% if request.query_params.get('saved') %}
+<div class="hint reveal">✓ Activos actualizados. La deuda se toma automáticamente de tus tarjetas.</div>
+{% endif %}
+
+{% set live = data.live_finances %}
+
+<section class="hero reveal">
+  <div class="hero-label">Patrimonio neto · en vivo</div>
+  <div class="hero-amount" data-count="{{ data.unified_net }}" data-prefix="$">$0</div>
+  <div class="hero-meta">
+    <span>Activos {{ data.total_assets | currency }}</span>
+    <span>Deuda TC {{ data.total_balance | currency }}</span>
     {% if data.net_change is not none %}
-    <div class="hero-change {% if data.net_change >= 0 %}up{% else %}down{% endif %}">
-      {% if data.net_change >= 0 %}↑{% else %}↓{% endif %} ${{ "{:,.0f}".format(data.net_change | abs) }} vs mes anterior
-    </div>
+    <span class="{% if data.net_change >= 0 %}text-good{% else %}text-bad{% endif %}">{% if data.net_change >= 0 %}+{% endif %}{{ data.net_change | currency }} vs cierre anterior</span>
     {% endif %}
   </div>
+</section>
 
-  <div class="panel">
-    <div class="panel-head"><div class="panel-title">Composición de activos</div></div>
-    <div class="asset-row"><span class="asset-dot dot-blue"></span><span class="asset-name">GBM</span><span class="asset-val">{{ latest.gbm | currency }}</span></div>
-    <div class="asset-row"><span class="asset-dot dot-green"></span><span class="asset-name">Afore</span><span class="asset-val">{{ latest.afore | currency }}</span></div>
-    <div class="asset-row"><span class="asset-dot dot-violet"></span><span class="asset-name">Infonavit</span><span class="asset-val">{{ latest.infonavit | currency }}</span></div>
-    <div class="asset-row"><span class="asset-dot dot-warn"></span><span class="asset-name">PPR</span><span class="asset-val">{{ latest.ppr | currency }}</span></div>
-    {% if latest.business %}<div class="asset-row"><span class="asset-dot dot-cyan"></span><span class="asset-name">Negocio</span><span class="asset-val">{{ latest.business | currency }}</span></div>{% endif %}
-    <div class="asset-row asset-debt">
-      <span class="asset-dot dot-bad"></span><span class="asset-name">Deuda</span>
-      <span class="asset-val text-bad">{{ latest.debt | currency }}</span>
+<div class="stats reveal">
+  <div class="stat"><div class="stat-label">GBM (vivo)</div><div class="stat-val">{{ data.gbm_live | currency }}</div></div>
+  <div class="stat"><div class="stat-label">Afore</div><div class="stat-val">{{ live.afore | currency }}</div></div>
+  <div class="stat"><div class="stat-label">Infonavit</div><div class="stat-val">{{ live.infonavit | currency }}</div></div>
+  <div class="stat"><div class="stat-label">PPR</div><div class="stat-val">{{ live.ppr | currency }}</div></div>
+</div>
+
+<div class="card reveal" style="margin-bottom:1rem">
+  <div class="card-body" style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between">
+    <div>
+      <div class="card-title">Cierre de mes</div>
+      <div class="card-desc">Guarda un snapshot con GBM en vivo, deuda real y patrimonio neto unificado.</div>
+    </div>
+    <form action="/patrimonio/cerrar" method="post">
+      <button type="submit" class="btn btn-primary">Cerrar {{ month_names[current_month] }}</button>
+    </form>
+  </div>
+</div>
+
+{% if data.patrimony %}
+<div class="split reveal">
+  <div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">Evolución (cierres mensuales)</div></div>
+      <div class="card-body"><div class="chart chart-lg"><canvas id="patChart"></canvas></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">Historial mensual</div></div>
+      <div class="card-body flush">
+        <table class="tbl">
+          <thead><tr><th>Mes</th><th class="num">Activos</th><th class="num">Deuda TC</th><th class="num">Neto</th><th class="num">Δ</th></tr></thead>
+          <tbody>
+            {% for p in data.patrimony %}
+            <tr>
+              <td>
+                <span class="sym">{{ p.label }}</span>
+                {% if p.is_closed %}<span class="sub"> · cerrado</span>{% endif %}
+              </td>
+              <td class="num good">{{ p.assets | currency }}</td>
+              <td class="num bad">{{ p.debt | currency }}</td>
+              <td class="num {% if p.net_worth >= 0 %}good{% else %}bad{% endif %}">{{ p.net_worth | currency }}</td>
+              <td class="num">
+                {% if loop.index > 1 %}
+                {% set prev = data.patrimony[loop.index0 - 1] %}
+                {% set ch = p.net_worth - prev.net_worth %}
+                <span class="{% if ch >= 0 %}good{% else %}bad{% endif %}">{% if ch >= 0 %}+{% endif %}{{ ch | currency }}</span>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="panel mb">
-  <div class="panel-head">
-    <div><div class="panel-title">Evolución</div><div class="panel-desc">Activos, deuda y neto</div></div>
-  </div>
-  <div class="chart-box-lg"><canvas id="patChart"></canvas></div>
-</div>
-
-<div class="panel mb">
-  <div class="panel-head"><div class="panel-title">Historial</div></div>
-  <div class="table-wrap">
-    <table class="data">
-      <thead>
-        <tr><th>Mes</th><th>GBM</th><th>Afore</th><th>Infonavit</th><th>Activos</th><th>Deuda</th><th>Neto</th><th>Δ</th></tr>
-      </thead>
-      <tbody>
-        {% for p in data.patrimony %}
-        <tr>
-          <td>{{ p.label }}</td>
-          <td>{{ p.gbm | currency }}</td>
-          <td>{{ p.afore | currency }}</td>
-          <td>{{ p.infonavit | currency }}</td>
-          <td class="text-accent">{{ p.assets | currency }}</td>
-          <td class="text-bad">{{ p.debt | currency }}</td>
-          <td class="{% if p.net_worth >= 0 %}text-good{% else %}text-bad{% endif %}">{{ p.net_worth | currency }}</td>
-          <td>
-            {% if loop.index > 1 %}
-            {% set prev = data.patrimony[loop.index0 - 1] %}
-            {% set ch = p.net_worth - prev.net_worth %}
-            <span class="{% if ch >= 0 %}text-good{% else %}text-bad{% endif %}">{% if ch >= 0 %}+{% endif %}{{ ch | currency }}</span>
-            {% else %}—{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <aside>
+    <div class="card">
+      <div class="card-head"><div class="card-title">Composición actual</div></div>
+      <div class="card-body flush">
+        <table class="tbl">
+          <tbody>
+            <tr><td>GBM</td><td class="num">{{ data.gbm_live | currency }}</td></tr>
+            <tr><td>Afore</td><td class="num">{{ live.afore | currency }}</td></tr>
+            <tr><td>Infonavit</td><td class="num">{{ live.infonavit | currency }}</td></tr>
+            <tr><td>PPR</td><td class="num">{{ live.ppr | currency }}</td></tr>
+            {% if live.business %}<tr><td>Negocio</td><td class="num">{{ live.business | currency }}</td></tr>{% endif %}
+            <tr><td class="bad">Deuda tarjetas</td><td class="num bad">{{ data.total_balance | currency }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </aside>
 </div>
 {% endif %}
 
-<div class="panel">
-  <div class="panel-head">
-    <div><div class="panel-title">Registrar mes</div><div class="panel-desc">Actualiza o crea un registro</div></div>
-  </div>
-  <form action="/patrimonio" method="post" class="form-grid">
-    <div class="form-field"><label>Año</label><input name="year" type="number" value="{{ current_year }}" required></div>
-    <div class="form-field">
-      <label>Mes</label>
-      <select name="month" required>{% for i in range(1,13) %}<option value="{{ i }}">{{ month_names[i] }}</option>{% endfor %}</select>
+<div class="card reveal">
+  <div class="card-head">
+    <div>
+      <div class="card-title">Actualizar activos</div>
+      <div class="card-desc">GBM se toma en vivo si dejas 0. La deuda siempre viene de tus tarjetas.</div>
     </div>
-    <div class="form-field"><label>GBM</label><input name="gbm" type="number" step="0.01" value="0"></div>
-    <div class="form-field"><label>PPR</label><input name="ppr" type="number" step="0.01" value="0"></div>
-    <div class="form-field"><label>Negocio</label><input name="business" type="number" step="0.01" value="0"></div>
-    <div class="form-field"><label>Afore</label><input name="afore" type="number" step="0.01" value="0"></div>
-    <div class="form-field"><label>Infonavit</label><input name="infonavit" type="number" step="0.01" value="0"></div>
-    <div class="form-field"><label>Deuda</label><input name="debt" type="number" step="0.01" value="0"></div>
-    <div class="form-field"><button type="submit" class="btn btn-primary btn-block">Guardar</button></div>
-  </form>
+  </div>
+  <div class="card-body">
+    <form action="/patrimonio" method="post" class="form-grid">
+      <div class="field"><label>Año</label><input name="year" type="number" value="{{ current_year }}" required></div>
+      <div class="field"><label>Mes</label><select name="month" required>{% for i in range(1,13) %}<option value="{{ i }}" {% if i == current_month %}selected{% endif %}>{{ month_names[i] }}</option>{% endfor %}</select></div>
+      <div class="field"><label>GBM</label><input name="gbm" type="number" step="0.01" value="{{ data.gbm_live | int }}" placeholder="0 = en vivo"></div>
+      <div class="field"><label>PPR</label><input name="ppr" type="number" step="0.01" value="{{ live.ppr }}"></div>
+      <div class="field"><label>Negocio</label><input name="business" type="number" step="0.01" value="{{ live.business }}"></div>
+      <div class="field"><label>Afore</label><input name="afore" type="number" step="0.01" value="{{ live.afore }}"></div>
+      <div class="field"><label>Infonavit</label><input name="infonavit" type="number" step="0.01" value="{{ live.infonavit }}"></div>
+      <div class="field"><button type="submit" class="btn btn-primary btn-block">Guardar activos</button></div>
+    </form>
+  </div>
 </div>
 {% endblock %}
 
@@ -99,9 +132,9 @@ initAnimatedChart(document.getElementById('patChart'), () => ({
   data: {
     labels: p.map(x => x.label.split(' ')[0]),
     datasets: [
-      { label: 'Activos', data: p.map(x => x.assets), borderColor: '#4f46e5', tension: 0.35, pointRadius: 3, borderWidth: 2 },
-      { label: 'Deuda', data: p.map(x => x.debt), borderColor: '#dc2626', tension: 0.35, pointRadius: 3, borderWidth: 2 },
-      { label: 'Neto', data: p.map(x => x.net_worth), borderColor: '#059669', tension: 0.35, pointRadius: 3, borderWidth: 2.5 },
+      { label: 'Activos', data: p.map(x => x.assets), borderColor: '#d4a853', tension: .35, borderWidth: 2 },
+      { label: 'Deuda TC', data: p.map(x => x.debt), borderColor: '#dc2626', tension: .35, borderWidth: 2 },
+      { label: 'Neto', data: p.map(x => x.net_worth), borderColor: '#059669', tension: .35, borderWidth: 2.5 },
     ]
   },
   options: chartDefaults(),

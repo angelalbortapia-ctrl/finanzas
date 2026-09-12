@@ -1,4 +1,5 @@
 """Import initial data from Tarjetas.xlsx into SQLite."""
+from datetime import date
 from pathlib import Path
 
 import openpyxl
@@ -28,6 +29,10 @@ def _clear_data(conn):
     conn.execute("DELETE FROM patrimony")
     conn.execute("DELETE FROM credit_cards")
     conn.execute("DELETE FROM persons")
+    conn.execute("DELETE FROM investment_holdings")
+    conn.execute("DELETE FROM investment_snapshot")
+    conn.execute("DELETE FROM portfolio_history")
+    conn.execute("DELETE FROM price_cache")
 
 
 def seed_from_excel():
@@ -100,7 +105,7 @@ def seed_from_excel():
         conn.execute(
             """INSERT INTO patrimony (year, month, gbm, ppr, business, afore, infonavit, debt)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (2025, MONTHS[month_name], gbm or 0, ppr or 0, business or 0,
+            (date.today().year, MONTHS[month_name], gbm or 0, ppr or 0, business or 0,
              afore or 0, infonavit or 0, debt or 0),
         )
 

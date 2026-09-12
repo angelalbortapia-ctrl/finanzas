@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Configuración — Finanzas{% endblock %}
+{% block page_title %}Configuración{% endblock %}
+{% block content %}
+
+<div class="card reveal" style="max-width:560px">
+  <div class="card-head"><div class="card-title">Arranque automático</div></div>
+  <div class="card-body">
+    <p style="font-size:.88rem;color:var(--muted);margin-bottom:1rem">
+      Para que la app siempre esté disponible, ejecuta <strong>instalar-servicio.command</strong> en la carpeta Finanzas.
+      Luego usa <strong>abrir.command</strong> o visita la URL guardada en <code>.url</code>.
+    </p>
+    <p style="font-size:.85rem;color:var(--muted)">URL actual: lee el archivo <code>.url</code> en la carpeta del proyecto.</p>
+  </div>
+</div>
+
+<div class="card reveal" style="max-width:560px">
+  <div class="card-head"><div class="card-title">Reimportar Excel de tarjetas</div></div>
+  <div class="card-body">
+    {% if request.query_params.get('ok') %}
+    <div class="alert alert-good" style="margin-bottom:1rem">Datos reimportados correctamente.</div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="alert alert-bad" style="margin-bottom:1rem">Debes escribir REIMPORTAR para confirmar.</div>
+    {% endif %}
+    <p style="font-size:.88rem;color:var(--bad);margin-bottom:1rem">
+      ⚠️ Esto <strong>borra</strong> tarjetas, categorías, patrimonio y gastos fijos, y los vuelve a cargar desde <code>Tarjetas.xlsx</code>.
+    </p>
+    <form action="/importar" method="post" class="form-grid">
+      <div class="field" style="grid-column:1/-1">
+        <label>Escribe REIMPORTAR para confirmar</label>
+        <input name="confirm" required placeholder="REIMPORTAR" autocomplete="off">
+      </div>
+      <div class="field">
+        <button type="submit" class="btn btn-primary" style="background:var(--bad)">Reimportar Excel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

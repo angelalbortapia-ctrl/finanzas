@@ -1,43 +1,23 @@
-{% macro wallet_card(name, balance, line, pct, url=None, index=0) %}
-{% if url %}
-<a href="{{ url }}" class="wallet-card w{{ index % 4 }}">
-{% else %}
-<div class="wallet-card wallet-card-static w{{ index % 4 }}">
-{% endif %}
+{% macro wallet_card(name, balance, line, available, pct, url=None, index=0) %}
+{% if url %}<a href="{{ url }}" class="wallet-card w{{ index % 4 }}">{% else %}<div class="wallet-card w{{ index % 4 }}">{% endif %}
+  <div class="wc-accent" aria-hidden="true"></div>
   <div class="wc-top">
-    <div class="wc-chip"></div>
+    <span class="wc-brand">{{ name }}</span>
     <span class="wc-pct">{{ "%.0f"|format(pct) }}%</span>
   </div>
   <div class="wc-mid">
-    <div class="wc-name">{{ name }}</div>
-    <div class="wc-num">•••• •••• •••• ••••</div>
+    <span class="wc-num">•••• •••• •••• 4821</span>
   </div>
   <div class="wc-bottom">
-    <div class="wc-balance">{{ balance }}</div>
-    <div class="wc-limit">de {{ line }}</div>
+    <div>
+      <div class="wc-balance-label">Saldo revolvente</div>
+      <div class="wc-balance">{{ balance }}</div>
+    </div>
+    <div class="wc-right">
+      <div class="wc-available">{{ available }}</div>
+      <div class="wc-limit">de {{ line }}</div>
+    </div>
   </div>
-  <div class="wc-bar"><div class="wc-bar-fill" style="width:{{ pct if pct <= 100 else 100 }}%"></div></div>
+  <div class="wc-bar"><div class="wc-bar-fill {% if pct >= 80 %}bad{% elif pct >= 60 %}warn{% endif %}" style="width:{{ pct if pct <= 100 else 100 }}%"></div></div>
 {% if url %}</a>{% else %}</div>{% endif %}
-{% endmacro %}
-
-{% macro stats_row(total_balance, total_available, total_line, usage_pct) %}
-<div class="kpi-row">
-  <div class="kpi">
-    <span class="kpi-label">Deuda</span>
-    <span class="kpi-value bad">{{ total_balance | currency }}</span>
-    <div class="progress"><div class="progress-fill {% if usage_pct >= 80 %}bad{% elif usage_pct >= 60 %}warn{% else %}good{% endif %}" style="width:{{ usage_pct }}%"></div></div>
-  </div>
-  <div class="kpi">
-    <span class="kpi-label">Disponible</span>
-    <span class="kpi-value good">{{ total_available | currency }}</span>
-  </div>
-  <div class="kpi">
-    <span class="kpi-label">Línea total</span>
-    <span class="kpi-value">{{ total_line | currency }}</span>
-  </div>
-  <div class="kpi">
-    <span class="kpi-label">Uso</span>
-    <span class="kpi-value">{{ "%.1f"|format(usage_pct) }}%</span>
-  </div>
-</div>
 {% endmacro %}

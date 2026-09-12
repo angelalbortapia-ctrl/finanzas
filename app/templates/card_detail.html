@@ -1,103 +1,134 @@
 {% extends "base.html" %}
 {% from "macros.html" import wallet_card %}
 {% block title %}{{ detail.card.name }} — Finanzas{% endblock %}
-{% block topbar_title %}{{ detail.card.name }}{% endblock %}
+{% block page_title %}{{ detail.card.name }}{% endblock %}
 {% block content %}
 
-<a href="/tarjetas" class="back-link">← Volver</a>
+<a href="/tarjetas" class="back">← Volver a tarjetas</a>
 
-{% set pct = balance / detail.card.credit_line * 100 if detail.card.credit_line else 0 %}
-
-<div class="card-preview">
-  {{ wallet_card(detail.card.name, balance | currency, detail.card.credit_line | currency, pct, none, 0) }}
-</div>
-
-<div class="grid-3 mb">
-  <div class="panel stat-mini">
-    <div class="stat-mini-label">Saldo usado</div>
-    <div class="stat-mini-value bad">{{ balance | currency }}</div>
-  </div>
-  <div class="panel stat-mini">
-    <div class="stat-mini-label">Disponible</div>
-    <div class="stat-mini-value good">{{ available | currency }}</div>
-  </div>
-  <div class="panel stat-mini">
-    <div class="stat-mini-label">% Uso</div>
-    <div class="stat-mini-value {% if pct >= 80 %}bad{% elif pct >= 60 %}text-warn{% else %}good{% endif %}">{{ "%.1f"|format(pct) }}%</div>
+<div class="card reveal" style="max-width:340px">
+  <div class="card-body" style="padding:.5rem">
+    {{ wallet_card(detail.card.name, revolving | currency, detail.card.credit_line | currency, available | currency, usage_pct, none, 0) }}
   </div>
 </div>
 
-<div class="grid-2-1 mb">
-  <div class="panel">
-    <div class="panel-head">
-      <div class="panel-title">Desglose por categoría</div>
+{% if loan_balance > 0 %}
+<div class="hint reveal">Incluye <strong>{{ loan_balance | currency }}</strong> en préstamo/apartado (no cuenta contra la línea de crédito).</div>
+{% endif %}
+
+<div class="stats reveal">
+  <div class="stat"><div class="stat-label">Revolvente</div><div class="stat-val bad">{{ revolving | currency }}</div></div>
+  {% if loan_balance > 0 %}
+  <div class="stat"><div class="stat-label">Préstamo</div><div class="stat-val">{{ loan_balance | currency }}</div></div>
+  {% endif %}
+  <div class="stat"><div class="stat-label">Total</div><div class="stat-val">{{ balance | currency }}</div></div>
+  <div class="stat"><div class="stat-label">Disponible</div><div class="stat-val good">{{ available | currency }}</div></div>
+  <div class="stat"><div class="stat-label">Uso línea</div><div class="stat-val {% if usage_pct >= 80 %}bad{% elif usage_pct >= 60 %}warn{% endif %}">{{ "%.1f"|format(usage_pct) }}%</div></div>
+  <div class="stat">
+    <div class="stat-label">Próximo pago</div>
+    <div class="stat-val {% if detail.card.payment_due_day %}good{% endif %}" style="font-size:1rem">
+      {% if card_info and card_info.payment_due_day %}
+      {{ card_info.days_until_payment }} días
+      {% else %}Sin fecha{% endif %}
     </div>
-    {% for cat in detail.categories %}
-    {% set cat_pct = (cat.amount / balance * 100) if balance else 0 %}
-    <div class="cat-item">
-      <div class="cat-row">
-        <span class="cat-name">{{ cat.name }}</span>
-        <span class="cat-val">{{ cat.amount | currency }}</span>
+  </div>
+</div>
+
+<div class="card reveal">
+  <div class="card-head"><div class="card-title">Fechas de pago</div></div>
+  <div class="card-body">
+    <form action="/tarjetas/{{ detail.card.id }}/fechas" method="post" class="form-grid">
+      <div class="field">
+        <label>Día de corte (1-31)</label>
+        <input name="cutoff_day" type="number" min="1" max="31" value="{{ detail.card.cutoff_day or '' }}" placeholder="Ej. 15">
       </div>
-      <div class="progress"><div class="progress-fill good" style="width:{{ cat_pct }}%"></div></div>
-    </div>
-    {% endfor %}
-  </div>
-
-  <div class="panel">
-    <div class="panel-head"><div class="panel-title">Distribución</div></div>
-    <div class="chart-box"><canvas id="catChart"></canvas></div>
+      <div class="field">
+        <label>Día límite de pago (1-31)</label>
+        <input name="payment_due_day" type="number" min="1" max="31" value="{{ detail.card.payment_due_day or '' }}" placeholder="Ej. 5">
+      </div>
+      <div class="field"><button type="submit" class="btn btn-primary">Guardar fechas</button></div>
+    </form>
   </div>
 </div>
 
-<div class="panel mb">
-  <div class="panel-head"><div class="panel-title">Editar categorías</div></div>
-  <div class="table-wrap">
-    <table class="data">
-      <thead><tr><th>Categoría</th><th>Monto</th><th></th></tr></thead>
-      <tbody>
+<div class="split reveal">
+  <div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">Por categoría</div></div>
+      <div class="card-body">
         {% for cat in detail.categories %}
-        <tr>
-          <td>{{ cat.name }}</td>
-          <td>{{ cat.amount | currency }}</td>
-          <td>
-            <form action="/tarjetas/{{ detail.card.id }}/categoria/{{ cat.id }}/editar" method="post" class="inline-form">
-              <input name="amount" type="number" step="0.01" value="{{ cat.amount }}">
-              <button type="submit" class="btn btn-secondary btn-sm">Guardar</button>
-            </form>
-          </td>
-        </tr>
+        {% set cat_pct = (cat.amount / balance * 100) if balance else 0 %}
+        <div class="cat-row">
+          <div class="cat-row-head">
+            <span>
+              {{ cat.name }}
+              {% if cat.kind == 'loan' %}<span class="badge badge-warn" style="margin-left:.35rem">Apartado</span>{% endif %}
+            </span>
+            <span>{{ cat.amount | currency }}</span>
+          </div>
+          <div class="progress"><div class="progress-fill {% if cat.kind == 'loan' %}warn{% else %}good{% endif %}" style="width:{{ cat_pct }}%"></div></div>
+        </div>
         {% endfor %}
-      </tbody>
-      <tfoot><tr><td>Total</td><td colspan="2">{{ balance | currency }}</td></tr></tfoot>
-    </table>
-  </div>
-</div>
-
-<div class="panel">
-  <div class="panel-head"><div class="panel-title">Nueva categoría</div></div>
-  <form action="/tarjetas/{{ detail.card.id }}/categoria" method="post" class="form-grid">
-    <div class="form-field"><label>Nombre</label><input name="name" required placeholder="Gastos"></div>
-    <div class="form-field"><label>Monto</label><input name="amount" type="number" step="0.01" value="0"></div>
-    <div class="form-field">
-      <label>Persona</label>
-      <select name="person_id"><option value="">—</option>{% for p in persons %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+      </div>
     </div>
-    <div class="form-field"><button type="submit" class="btn btn-primary btn-block">Agregar</button></div>
-  </form>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">Editar categorías</div></div>
+      <div class="card-body flush">
+        <table class="tbl">
+          <thead><tr><th>Categoría</th><th>Tipo</th><th class="num">Monto</th><th></th></tr></thead>
+          <tbody>
+            {% for cat in detail.categories %}
+            <tr>
+              <td>{{ cat.name }}</td>
+              <td colspan="3">
+                <form action="/tarjetas/{{ detail.card.id }}/categoria/{{ cat.id }}/editar" method="post" style="display:flex;gap:.35rem;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+                  <select name="kind" style="font-size:.75rem;padding:.25rem">
+                    <option value="spend" {% if cat.kind != 'loan' %}selected{% endif %}>Gasto</option>
+                    <option value="loan" {% if cat.kind == 'loan' %}selected{% endif %}>Préstamo/apartado</option>
+                  </select>
+                  <input name="amount" type="number" step="0.01" value="{{ cat.amount }}" style="width:90px;padding:.3rem;border:1px solid var(--line);border-radius:6px">
+                  <button type="submit" class="btn btn-ghost btn-sm">Guardar</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">Nueva categoría</div></div>
+      <div class="card-body">
+        <form action="/tarjetas/{{ detail.card.id }}/categoria" method="post" class="form-grid">
+          <div class="field"><label>Nombre</label><input name="name" required></div>
+          <div class="field"><label>Monto</label><input name="amount" type="number" step="0.01" value="0"></div>
+          <div class="field"><label>Persona</label><select name="person_id"><option value="">—</option>{% for p in persons %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+          <div class="field"><button type="submit" class="btn btn-primary btn-block">Agregar</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="card">
+      <div class="card-head"><div class="card-title">Distribución</div></div>
+      <div class="card-body"><div class="chart"><canvas id="catChart"></canvas></div></div>
+    </div>
+  </aside>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 const cats = {{ detail.categories | tojson }};
-const colors = ['#4f46e5','#059669','#d97706','#7c3aed','#dc2626','#0891b2'];
 if (cats.length) {
   initAnimatedChart(document.getElementById('catChart'), () => ({
     type: 'doughnut',
     data: {
       labels: cats.map(c => c.name),
-      datasets: [{ data: cats.map(c => c.amount), backgroundColor: colors, borderWidth: 0 }],
+      datasets: [{ data: cats.map(c => c.amount), backgroundColor: ['#d4a853','#34d399','#fbbf24','#94a3b8','#f87171','#60a5fa'], borderWidth: 0 }],
     },
     options: donutDefaults(),
   }));

@@ -1,171 +1,322 @@
 {% extends "base.html" %}
-{% from "macros.html" import wallet_card, stats_row %}
+{% from "macros.html" import wallet_card %}
 {% block title %}Inicio — Finanzas{% endblock %}
-{% block topbar_title %}Resumen{% endblock %}
+{% block page_title %}{% endblock %}
 {% block content %}
 
-{% if data.alerts %}
-<div class="alerts">
-  {% for a in data.alerts %}
-  <div class="alert alert-{{ a.type }}">{{ a.message }}</div>
-  {% endfor %}
+{% set inv = data.investment_snapshot %}
+{% set gbm_pnl = inv.pnl if inv else 0 %}
+{% set hcolor = '#34d399' if data.health.color == 'good' else '#fbbf24' if data.health.color in ('warn','mid') else '#f87171' %}
+{% set next_pay = data.upcoming_payments[0] if data.upcoming_payments else none %}
+
+<!-- Rail de métricas -->
+<section class="metric-rail reveal" aria-label="Resumen financiero">
+  <div class="metric-cell metric-cell-hero">
+    <span class="metric-label">Patrimonio neto</span>
+    <strong class="metric-value metric-value-xl" data-count="{{ data.unified_net }}" data-prefix="$">$0</strong>
+    {% if data.net_change is not none %}
+    <span class="metric-delta {% if data.net_change >= 0 %}up{% else %}down{% endif %}">
+      {% if data.net_change >= 0 %}+{% else %}−{% endif %}{{ data.net_change | currency }} vs mes anterior
+    </span>
+    {% endif %}
+  </div>
+  <div class="metric-cell">
+    <span class="metric-label">Activos</span>
+    <strong class="metric-value">{{ data.total_assets | currency }}</strong>
+  </div>
+  <div class="metric-cell">
+    <span class="metric-label">Deuda revolvente</span>
+    <strong class="metric-value bad">{{ data.total_revolving | currency }}</strong>
+  </div>
+  {% if data.total_loan > 0 %}
+  <div class="metric-cell">
+    <span class="metric-label">Préstamos</span>
+    <strong class="metric-value">{{ data.total_loan | currency }}</strong>
+  </div>
+  {% endif %}
+  <div class="metric-cell">
+    <span class="metric-label">GBM</span>
+    <strong class="metric-value">{{ data.gbm_live | currency }}</strong>
+  </div>
+  <div class="metric-cell">
+    <span class="metric-label">Disponible</span>
+    <strong class="metric-value good">{{ data.total_available | currency }}</strong>
+  </div>
+  <div class="metric-cell metric-cell-score">
+    <span class="metric-label">Salud crediticia</span>
+    <div class="score-inline" style="--score: {{ data.health.score }}; --ring-color: {{ hcolor }}">
+      <span class="score-num">{{ data.health.score }}</span>
+      <span class="score-tag">{{ data.health.label }}</span>
+    </div>
+  </div>
+</section>
+
+{% if data.month_close.remind %}
+<div class="alert-strip warn reveal">
+  <span class="alert-strip-label">Cierre de mes</span>
+  <strong>{{ data.month_close.label }}</strong>
+  <span class="alert-strip-meta">Sin snapshot · {{ data.month_close.days_left }} día(s) restantes</span>
+  <form action="/patrimonio/cerrar" method="post" class="inline-form" style="margin-left:auto">
+    <button type="submit" class="btn btn-primary btn-sm">Cerrar mes</button>
+  </form>
 </div>
 {% endif %}
 
-<section class="section">
-  <div class="section-head">
-    <div>
-      <h2 class="section-title">Mis tarjetas</h2>
-      <p class="section-desc">{{ data.cards | length }} activas · ${{ "{:,.0f}".format(data.total_balance) }} en deuda</p>
-    </div>
-    <a href="/tarjetas" class="btn btn-ghost btn-sm">Gestionar</a>
-  </div>
-  <div class="wallet">
-    {% for c in data.cards %}
-    {{ wallet_card(c.name, c.balance | currency, c.credit_line | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
-    {% endfor %}
-  </div>
-</section>
-
-<section class="section">
-  {{ stats_row(data.total_balance, data.total_available, data.total_line, data.usage_pct) }}
-</section>
-
-<section class="grid-2-1 section">
-  {% if data.latest_patrimony %}
-  <div class="hero-card">
-    <div class="hero-label">Patrimonio neto · {{ data.latest_patrimony.label }}</div>
-    <div class="hero-value" data-count="{{ data.latest_patrimony.net_worth }}" data-prefix="$">$0</div>
-    {% if data.net_change is not none %}
-    <div class="hero-change {% if data.net_change >= 0 %}up{% else %}down{% endif %}">
-      {% if data.net_change >= 0 %}↑{% else %}↓{% endif %}
-      ${{ "{:,.0f}".format(data.net_change | abs) }} vs mes anterior
-    </div>
-    {% endif %}
-    <a href="/patrimonio" class="hero-link">Ver patrimonio →</a>
-  </div>
-  {% else %}
-  <div class="hero-card">
-    <div class="hero-label">Deuda en tarjetas</div>
-    <div class="hero-value">{{ data.total_balance | currency }}</div>
-  </div>
-  {% endif %}
-
-  <div class="panel health-panel">
-    <div class="panel-title">Salud crediticia</div>
-    <div class="health-ring-wrap">
-      <canvas id="healthRing"></canvas>
-      <div class="health-ring-center">
-        <div class="health-score">{{ data.health.score }}</div>
-        <div class="health-label {{ data.health.color }}">{{ data.health.label }}</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="grid-2 section">
-  <div class="panel">
-    <div class="panel-head">
-      <div class="panel-title">Saldo por tarjeta</div>
-    </div>
-    <div class="chart-box"><canvas id="cardsChart"></canvas></div>
-  </div>
-
-  {% if data.patrimony %}
-  <div class="panel">
-    <div class="panel-head">
-      <div class="panel-title">Evolución patrimonial</div>
-      <a href="/patrimonio" class="btn btn-ghost btn-sm">Detalle</a>
-    </div>
-    <div class="chart-box"><canvas id="patChart"></canvas></div>
-  </div>
-  {% else %}
-  <div class="panel">
-    <div class="panel-head"><div class="panel-title">Insights</div></div>
-    {% for ins in data.insights %}
-    <div class="insight">
-      <div class="insight-title">{{ ins.title }}</div>
-      <div class="insight-text">{{ ins.text }}</div>
-    </div>
-    {% else %}
-    <p class="text-muted">Todo en orden.</p>
-    {% endfor %}
-  </div>
-  {% endif %}
-</section>
-
-{% if data.patrimony or data.insights or data.other_expenses %}
-<section class="grid-2-1 section">
-  <div class="panel">
-    <div class="panel-head"><div class="panel-title">Insights</div></div>
-    {% for ins in data.insights %}
-    <div class="insight">
-      <div class="insight-title">{{ ins.title }}</div>
-      <div class="insight-text">{{ ins.text }}</div>
-    </div>
-    {% else %}
-    <p class="text-muted">Sin alertas por ahora.</p>
-    {% endfor %}
-    <form action="/importar" method="post" class="sync-form">
-      <button type="submit" class="btn btn-secondary btn-sm btn-block">Sincronizar desde Excel</button>
-    </form>
-  </div>
-
-  <div class="panel">
-    <div class="panel-head"><div class="panel-title">Otros movimientos</div></div>
-    {% if data.other_expenses %}
-    {% for e in data.other_expenses %}
-    <div class="cat-row">
-      <span class="cat-name">{{ e.name }}</span>
-      <span class="cat-val {% if e.amount < 0 %}text-bad{% else %}text-good{% endif %}">{{ e.amount | currency }}</span>
-    </div>
-    {% endfor %}
-    <div class="cat-row cat-total">
-      <span>Total</span>
-      <span class="{% if data.other_total < 0 %}text-bad{% endif %}">{{ data.other_total | currency }}</span>
-    </div>
-    {% else %}
-    <p class="text-muted">Sin otros movimientos.</p>
-    {% endif %}
-  </div>
-</section>
+{% if next_pay and next_pay.days <= 3 %}
+<div class="alert-strip {{ next_pay.urgency }} reveal">
+  <span class="alert-strip-label">Pago próximo</span>
+  <strong>{{ next_pay.name }}</strong>
+  <span class="alert-strip-meta">
+    {% if next_pay.days == 0 %}Hoy{% elif next_pay.days == 1 %}Mañana{% else %}En {{ next_pay.days }} días{% endif %}
+    {% if next_pay.amount %} · {{ next_pay.amount | currency }}{% endif %}
+  </span>
+</div>
 {% endif %}
 
+<!-- Acciones rápidas -->
+<nav class="action-bar reveal" aria-label="Acciones">
+  <a href="/tarjetas" class="action-chip">
+    <span class="action-chip-kicker">Tarjetas</span>
+    <span class="action-chip-val">{{ "%.0f"|format(data.usage_pct) }}% uso · {{ data.cards | length }} activas</span>
+  </a>
+  <a href="/inversiones" class="action-chip">
+    <span class="action-chip-kicker">Portafolio</span>
+    <span class="action-chip-val">{{ data.gbm_live | currency }}{% if inv %} · P&amp;L {{ gbm_pnl | currency }}{% endif %}</span>
+  </a>
+  <a href="/simulador" class="action-chip">
+    <span class="action-chip-kicker">Simulador</span>
+    <span class="action-chip-val">Plan de liquidación</span>
+  </a>
+  <a href="/movimientos" class="action-chip action-chip-primary">
+    <span class="action-chip-kicker">Registrar</span>
+    <span class="action-chip-val">Gasto o pago</span>
+  </a>
+</nav>
+
+<!-- Workspace -->
+<div class="workspace reveal">
+  <div class="workspace-main">
+
+    <section class="panel">
+      <header class="panel-head">
+        <div>
+          <h2 class="panel-title">Tarjetas de crédito</h2>
+          <p class="panel-desc">{{ data.total_revolving | currency }} revolvente{% if data.total_loan > 0 %} · {{ data.total_loan | currency }} en préstamos{% endif %}</p>
+        </div>
+        <a href="/tarjetas" class="btn btn-ghost btn-sm">Ver todas</a>
+      </header>
+      <div class="panel-body panel-body-flush">
+        <div class="cards-scroll">
+          {% for c in data.cards %}
+          {{ wallet_card(c.name, c.revolving_balance | currency, c.credit_line | currency, c.available | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <div class="panel-duo">
+      <section class="panel">
+        <header class="panel-head">
+          <h2 class="panel-title">Deuda por tarjeta</h2>
+        </header>
+        <div class="panel-body">
+          <div class="chart"><canvas id="cardsChart"></canvas></div>
+        </div>
+      </section>
+      {% if data.patrimony %}
+      <section class="panel">
+        <header class="panel-head">
+          <h2 class="panel-title">Evolución patrimonial</h2>
+          <a href="/patrimonio" class="btn btn-ghost btn-sm">Historial</a>
+        </header>
+        <div class="panel-body">
+          <div class="chart"><canvas id="patChart"></canvas></div>
+        </div>
+      </section>
+      {% endif %}
+    </div>
+
+    <details class="panel panel-collapsible">
+      <summary class="panel-head panel-head-toggle">
+        <div>
+          <h2 class="panel-title">Gastos fijos mensuales</h2>
+          <p class="panel-desc">{{ data.other_total | currency }} / mes</p>
+        </div>
+        <span class="toggle-icon" aria-hidden="true"></span>
+      </summary>
+      <div class="panel-body">
+        {% for e in data.other_expenses %}
+        <form action="/gastos-fijos/{{ e.id }}" method="post" class="fixed-row">
+          <span class="fixed-name">{{ e.name }}</span>
+          <input name="amount" type="number" step="0.01" value="{{ e.amount }}">
+          <input name="due_day" type="number" min="1" max="31" class="fixed-day" value="{{ e.due_day or '' }}" placeholder="Día">
+          <button type="submit" class="btn btn-ghost btn-sm">OK</button>
+        </form>
+        {% endfor %}
+        <form action="/gastos-fijos/nuevo" method="post" class="fixed-row fixed-row-new">
+          <input name="name" required placeholder="Nuevo concepto" class="fixed-name-input">
+          <input name="amount" type="number" step="0.01" value="0">
+          <input name="due_day" type="number" min="1" max="31" class="fixed-day" placeholder="Día">
+          <button type="submit" class="btn btn-primary btn-sm">Agregar</button>
+        </form>
+      </div>
+    </details>
+  </div>
+
+  <aside class="workspace-aside">
+
+    <section class="panel">
+      <header class="panel-head">
+        <h2 class="panel-title">Meta del mes</h2>
+      </header>
+      <div class="panel-body">
+        <div class="goal-block" id="widget-goal">
+          <div class="goal-kicker">Pagos a tarjetas</div>
+          <div class="goal-progress-text" id="goal-progress-text">$0 / $0</div>
+          <div class="goal-bar"><div class="goal-bar-fill" id="goal-progress-bar"></div></div>
+          <form class="goal-form" id="goal-form">
+            <input type="number" id="goal-input" min="0" step="100" placeholder="Meta pagos $" inputmode="decimal" value="{{ data.payment_goal | int if data.payment_goal else '' }}">
+            <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+          </form>
+        </div>
+        <div class="goal-block" id="widget-savings" style="margin-top:1rem">
+          <div class="goal-kicker">Ahorro / inversión (GBM)</div>
+          <div class="goal-progress-text" id="savings-progress-text">$0 / $0</div>
+          <div class="goal-bar goal-bar-savings"><div class="goal-bar-fill" id="savings-progress-bar"></div></div>
+          <form class="goal-form" id="savings-form">
+            <input type="number" id="savings-input" min="0" step="100" placeholder="Meta ahorro $" inputmode="decimal" value="{{ data.savings_goal | int if data.savings_goal else '' }}">
+            <button type="submit" class="btn btn-ghost btn-sm">Guardar</button>
+          </form>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-item">
+            <span>Pagado</span>
+            <strong>{{ data.month_payments | currency }}</strong>
+          </div>
+          <div class="kpi-item">
+            <span>Fijos</span>
+            <strong>{{ data.other_total | currency }}</strong>
+          </div>
+          <div class="kpi-item">
+            <span>Libre</span>
+            <strong class="good">{{ data.total_available | currency }}</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-head">
+        <h2 class="panel-title">Calendario de pagos</h2>
+      </header>
+      <div class="panel-body panel-body-tight">
+        {% if data.upcoming_payments %}
+        <div class="pay-schedule">
+          {% for p in data.upcoming_payments[:6] %}
+          <div class="pay-schedule-row {{ p.urgency }}">
+            <div class="pay-schedule-date">
+              {% if p.date %}{{ p.date.strftime('%d') }}<small>{{ p.date.strftime('%b') }}</small>{% endif %}
+            </div>
+            <div class="pay-schedule-info">
+              <strong>{{ p.name }}</strong>
+              {% if p.amount %}<span>{{ p.amount | currency }}</span>{% endif %}
+            </div>
+            <div class="pay-schedule-when">
+              {% if p.days == 0 %}Hoy{% elif p.days == 1 %}1d{% else %}{{ p.days }}d{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="panel-empty">Configura el día de pago en cada tarjeta.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if data.insights %}
+    <section class="panel">
+      <header class="panel-head">
+        <h2 class="panel-title">Señales</h2>
+      </header>
+      <div class="panel-body panel-body-tight">
+        {% for item in data.insights[:4] %}
+        <div class="insight">
+          <div class="insight-title">{{ item.title }}</div>
+          <div class="insight-text">{{ item.text }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <header class="panel-head">
+        <h2 class="panel-title">Operaciones</h2>
+      </header>
+      <div class="panel-body panel-body-tight panel-body-ops">
+        <a href="/exportar/mensual.pdf" class="op-link">
+          <span>Reporte PDF</span>
+          <small>Resumen mensual</small>
+        </a>
+        <a href="/exportar/portafolio.csv" class="op-link">
+          <span>Portafolio CSV</span>
+          <small>Posiciones GBM</small>
+        </a>
+        <form action="/patrimonio/cerrar" method="post" class="op-form">
+          <button type="submit" class="op-link op-link-btn">
+            <span>Cerrar mes</span>
+            <small>Snapshot patrimonial</small>
+          </button>
+        </form>
+        <div class="op-link op-link-notify" id="widget-notify">
+          <div>
+            <span>Alertas de pago</span>
+            <small id="notify-status">Desactivadas</small>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="notify-enable-btn">Activar</button>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-const health = {{ data.health.score }};
-initAnimatedChart(document.getElementById('healthRing'), () => {
-  const ctx = document.getElementById('healthRing').getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 150, 150);
-  grad.addColorStop(0, '#4f46e5');
-  grad.addColorStop(1, '#0891b2');
-  return {
-    type: 'doughnut',
-    data: { datasets: [{ data: [health, 100 - health], backgroundColor: [grad, donutTrackColor()], borderWidth: 0 }] },
-    options: { ...donutDefaults(), cutout: '82%' },
-  };
-}, { immediate: true });
+initProWidgets();
+initSavingsWidget();
+initPaymentNotifications();
 
-const cards = {{ data.cards | tojson }};
+const cards = [
+  {% for c in data.cards %}
+  { name: {{ c.name | tojson }}, revolving_balance: {{ c.revolving_balance }}, usage_pct: {{ c.usage_pct }} }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
 initAnimatedChart(document.getElementById('cardsChart'), () => ({
   type: 'bar',
   data: {
     labels: cards.map(c => c.name),
     datasets: [{
-      label: 'Saldo',
-      data: cards.map(c => c.balance),
-      backgroundColor: cards.map(c => c.usage_pct >= 80 ? '#dc2626' : c.usage_pct >= 60 ? '#d97706' : '#4f46e5'),
-      borderRadius: 8,
-      barPercentage: 0.55,
+      data: cards.map(c => c.revolving_balance),
+      backgroundColor: cards.map(c => {
+        if (c.usage_pct >= 80) return '#f87171';
+        if (c.usage_pct >= 60) return '#fbbf24';
+        return '#d4a853';
+      }),
+      borderRadius: 3,
+      barPercentage: 0.6,
     }]
   },
-  options: { ...chartDefaults(), plugins: { ...chartDefaults().plugins, legend: { display: false } } },
+  options: { ...chartDefaults(), plugins: { legend: { display: false } } },
 }));
 
 const pat = {{ data.patrimony | tojson }};
 if (pat.length && document.getElementById('patChart')) {
+  const ctx = document.getElementById('patChart').getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 220);
+  g.addColorStop(0, 'rgba(212,168,83,0.18)');
+  g.addColorStop(1, 'rgba(212,168,83,0)');
   initAnimatedChart(document.getElementById('patChart'), () => ({
     type: 'line',
     data: {
@@ -173,11 +324,9 @@ if (pat.length && document.getElementById('patChart')) {
       datasets: [{
         label: 'Patrimonio neto',
         data: pat.map(p => p.net_worth),
-        borderColor: '#4f46e5',
-        backgroundColor: 'rgba(79,70,229,0.08)',
-        fill: true, tension: 0.35,
-        pointRadius: 3, pointBackgroundColor: '#4f46e5',
-        borderWidth: 2,
+        borderColor: '#d4a853',
+        backgroundColor: g,
+        fill: true, tension: 0.15, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
       }]
     },
     options: chartDefaults(),
