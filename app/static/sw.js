@@ -1,12 +1,13 @@
-const CACHE = 'finanzas-pro-v40';
+const CACHE = 'finanzas-pro-v41';
 const PRECACHE = [
   '/',
   '/static/app.css?v=28',
-  '/static/app.js?v=28',
+  '/static/app.js?v=29',
+  '/static/sw.js?v=41',
   '/static/charts.js?v=13',
-  '/static/terminal.css?v=34',
-  '/static/terminal.js?v=34',
-  '/static/terminal-layout.js?v=34',
+  '/static/terminal.css?v=35',
+  '/static/terminal.js?v=35',
+  '/static/terminal-layout.js?v=35',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/offline',

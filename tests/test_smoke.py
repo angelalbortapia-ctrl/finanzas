@@ -1,18 +1,41 @@
-"""Smoke tests — run with: python3 -m unittest tests.test_smoke"""
+"""Smoke tests — run with: PYTHONPATH=. python3 -m unittest tests.test_smoke"""
+import tempfile
 import unittest
+from pathlib import Path
 
+import app.database as db
 from app.catalog import bmv_to_yahoo
 from app.database import get_db, init_db
-from app.finances import compute_live_finances, month_close_status
+from app.finances import month_close_status
+from app.gbm import _save_to_db
 from app.gbm_fees import calc_net_sale
 from app.history import get_portfolio_history
 from app.market import _holding_ticker_key, get_price_history
-from app.queries import _apply_payment_to_card, _enrich_card, export_holdings_csv, get_investments
+from app.queries import (
+    _apply_payment_to_card,
+    _enrich_card,
+    export_holdings_csv,
+    get_investments,
+    infer_category_kind,
+)
 from app.simulator import simulate_payoff
 from app.terminal import _compute_indicators, get_economic_calendar, get_fx_panel, get_live_quotes, get_market_status
 
 
 class SmokeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        cls._tmp.close()
+        cls._orig_db = db.DB_PATH
+        db.DB_PATH = Path(cls._tmp.name)
+        init_db()
+
+    @classmethod
+    def tearDownClass(cls):
+        db.DB_PATH = cls._orig_db
+        Path(cls._tmp.name).unlink(missing_ok=True)
+
     def test_market_status(self):
         st = get_market_status()
         self.assertIn(st["status"], {"open", "closed", "pre", "after"})
@@ -38,6 +61,10 @@ class SmokeTests(unittest.TestCase):
     def test_bmv_to_yahoo_overrides(self):
         self.assertEqual(bmv_to_yahoo("IPC"), "^MXX")
         self.assertEqual(bmv_to_yahoo("GFNORTEO"), "GFNORTEO.MX")
+
+    def test_infer_prestamo_kind(self):
+        self.assertEqual(infer_category_kind("Préstamo"), "loan")
+        self.assertEqual(infer_category_kind("Gastos"), "spend")
 
     def test_simulator_revolving_only(self):
         cards = [
@@ -74,7 +101,6 @@ class SmokeTests(unittest.TestCase):
         self.assertIsInstance(q, dict)
 
     def test_price_history_ticker_formats(self):
-        init_db()
         conn = get_db()
         key = _holding_ticker_key("GFNORTEO")
         conn.execute(
@@ -88,7 +114,6 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(rows[-1]["price"], 123.45)
 
     def test_payment_skips_loan_categories(self):
-        init_db()
         conn = get_db()
         conn.execute("DELETE FROM card_categories")
         conn.execute("DELETE FROM credit_cards")
@@ -109,9 +134,14 @@ class SmokeTests(unittest.TestCase):
         loan = conn.execute(
             "SELECT amount FROM card_categories WHERE card_id = 99 AND kind = 'loan'"
         ).fetchone()["amount"]
+        conn.commit()
         conn.close()
         self.assertEqual(spend, 0)
         self.assertEqual(loan, 5000)
+
+    def test_empty_gbm_import_rejected(self):
+        with self.assertRaises(ValueError):
+            _save_to_db({"snapshot": {"invested": 0, "market_value": 0, "cash": 0, "pnl": 0, "return_pct": 0}, "holdings": []}, "excel")
 
     def test_get_investments_with_null_weight(self):
         data = get_investments()

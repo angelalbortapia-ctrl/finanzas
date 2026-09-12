@@ -57,7 +57,7 @@
               <td><span class="sub">{{ t.card_name or '—' }}</span></td>
               <td class="num {% if t.type == 'expense' %}bad{% else %}good{% endif %}">{% if t.type == 'expense' %}-{% else %}+{% endif %}{{ t.amount | currency }}</td>
               <td class="row-actions">
-                <button type="button" class="btn btn-ghost btn-sm tx-edit-btn" data-tx="{{ t | tojson | e }}">Editar</button>
+                <button type="button" class="btn btn-ghost btn-sm tx-edit-btn" data-tx='{{ t | tojson }}'>Editar</button>
                 <form action="/movimientos/{{ t.id }}/eliminar" method="post" class="inline-form" onsubmit="return confirm('¿Eliminar este movimiento? Se revertirá el saldo de la tarjeta.')">
                   <button type="submit" class="btn btn-ghost btn-sm bad-text">Borrar</button>
                 </form>

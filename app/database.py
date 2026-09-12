@@ -1,7 +1,9 @@
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "finanzas.db"
+_DEFAULT_DB = Path(__file__).parent.parent / "finanzas.db"
+DB_PATH = Path(os.environ.get("FINANZAS_DB_PATH", str(_DEFAULT_DB)))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS persons (
@@ -138,9 +140,10 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
     return conn
 
 

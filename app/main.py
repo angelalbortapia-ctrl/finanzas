@@ -430,7 +430,10 @@ async def add_transaction_route(
     person_id: Optional[int] = Form(None),
     type: str = Form("expense"),
 ):
-    add_transaction(date, amount, description, category, card_id, person_id, type)
+    try:
+        add_transaction(date, amount, description, category, card_id, person_id, type)
+    except ValueError as exc:
+        return RedirectResponse(f"/movimientos?error=validation&msg={quote(str(exc))}", status_code=303)
     return RedirectResponse("/movimientos?saved=1", status_code=303)
 
 
@@ -445,8 +448,11 @@ async def edit_transaction_route(
     person_id: Optional[int] = Form(None),
     type: str = Form("expense"),
 ):
-    if not update_transaction(tx_id, date, amount, description, category, card_id, person_id, type):
-        return RedirectResponse("/movimientos?error=notfound", status_code=303)
+    try:
+        if not update_transaction(tx_id, date, amount, description, category, card_id, person_id, type):
+            return RedirectResponse("/movimientos?error=notfound", status_code=303)
+    except ValueError as exc:
+        return RedirectResponse(f"/movimientos?error=validation&msg={quote(str(exc))}", status_code=303)
     return RedirectResponse("/movimientos?updated=1", status_code=303)
 
 

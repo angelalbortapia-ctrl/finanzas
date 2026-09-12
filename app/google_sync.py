@@ -17,7 +17,6 @@ def get_google_status() -> dict:
     return {
         "configured": is_google_configured(),
         "sheets_id": GOOGLE_SHEETS_ID or None,
-        "credentials_path": str(GOOGLE_CREDENTIALS_PATH),
         "credentials_exists": GOOGLE_CREDENTIALS_PATH.exists(),
     }
 

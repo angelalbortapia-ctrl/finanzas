@@ -6,6 +6,7 @@ import openpyxl
 
 from app.config import EXCEL_PATH
 from app.database import get_db, init_db
+from app.queries import infer_category_kind
 
 MONTHS = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
@@ -23,16 +24,13 @@ def _person_id(conn, name: str) -> int:
 
 
 def _clear_data(conn):
+    """Solo datos de tarjetas/patrimonio — no toca inversiones ni historial de portafolio."""
     conn.execute("DELETE FROM transactions")
     conn.execute("DELETE FROM card_categories")
     conn.execute("DELETE FROM other_expenses")
     conn.execute("DELETE FROM patrimony")
     conn.execute("DELETE FROM credit_cards")
     conn.execute("DELETE FROM persons")
-    conn.execute("DELETE FROM investment_holdings")
-    conn.execute("DELETE FROM investment_snapshot")
-    conn.execute("DELETE FROM portfolio_history")
-    conn.execute("DELETE FROM price_cache")
 
 
 def seed_from_excel():
@@ -76,8 +74,9 @@ def seed_from_excel():
         card_id = cur.lastrowid
         for cat_name, amount, pid in categories:
             conn.execute(
-                "INSERT INTO card_categories (card_id, name, amount, person_id) VALUES (?, ?, ?, ?)",
-                (card_id, cat_name, amount, pid),
+                """INSERT INTO card_categories (card_id, name, amount, person_id, kind)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (card_id, cat_name, amount, pid, infer_category_kind(cat_name)),
             )
 
     # Other expenses (rows 31-37)

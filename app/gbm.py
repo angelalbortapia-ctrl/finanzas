@@ -126,6 +126,10 @@ def parse_gbm_sheets(portfolio_rows: list[list[Any]], monitor_rows: list[list[An
 
 
 def _save_to_db(data: dict, source: str) -> None:
+    holdings = data.get("holdings") or []
+    if not holdings:
+        raise ValueError("El import no contiene posiciones — no se modificó la base de datos")
+
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_db()
 
@@ -140,7 +144,7 @@ def _save_to_db(data: dict, source: str) -> None:
     )
 
     imported_tickers: list[str] = []
-    for h in data["holdings"]:
+    for h in holdings:
         imported_tickers.append(h["ticker"])
         existing = conn.execute(
             "SELECT id FROM investment_holdings WHERE ticker = ?", (h["ticker"],)
@@ -172,18 +176,13 @@ def _save_to_db(data: dict, source: str) -> None:
                 (h["ticker"], h["market_price"], source, now),
             )
 
-    if imported_tickers:
-        placeholders = ",".join("?" * len(imported_tickers))
-        conn.execute(
-            f"""DELETE FROM investment_holdings
-                WHERE ticker NOT IN ({placeholders})
-                  AND COALESCE(price_source, '') != 'manual'""",
-            imported_tickers,
-        )
-    else:
-        conn.execute(
-            "DELETE FROM investment_holdings WHERE COALESCE(price_source, '') != 'manual'"
-        )
+    placeholders = ",".join("?" * len(imported_tickers))
+    conn.execute(
+        f"""DELETE FROM investment_holdings
+            WHERE ticker NOT IN ({placeholders})
+              AND COALESCE(price_source, '') != 'manual'""",
+        imported_tickers,
+    )
 
     conn.execute("DELETE FROM market_indices")
     for idx in data.get("indices", []):
@@ -198,14 +197,16 @@ def _save_to_db(data: dict, source: str) -> None:
         (source, "ok", f"{len(data['holdings'])} posiciones importadas", now),
     )
 
-    # Al importar explícitamente, sincronizar GBM al patrimonio del mes vigente.
+    # Al importar explícitamente, sincronizar GBM al mes calendario actual si existe fila.
+    today = datetime.now().date()
     row = conn.execute(
-        "SELECT year, month FROM patrimony ORDER BY year DESC, month DESC LIMIT 1"
+        "SELECT year, month FROM patrimony WHERE year = ? AND month = ?",
+        (today.year, today.month),
     ).fetchone()
     if row:
         conn.execute(
             "UPDATE patrimony SET gbm = ? WHERE year = ? AND month = ?",
-            (snap["market_value"], row["year"], row["month"]),
+            (snap["market_value"], today.year, today.month),
         )
 
     conn.commit()

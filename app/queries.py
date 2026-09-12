@@ -447,8 +447,25 @@ def _add_to_category(conn, card_id: int, name: str, amount: float, person_id: in
         )
 
 
+def _card_revolving_total(conn, card_id: int) -> float:
+    row = conn.execute(
+        """SELECT COALESCE(SUM(amount), 0) AS total FROM card_categories
+           WHERE card_id = ? AND amount > 0 AND COALESCE(kind, 'spend') = 'spend'""",
+        (card_id,),
+    ).fetchone()
+    return float(row["total"] or 0)
+
+
+def _normalize_tx_type(type: str) -> str:
+    t = (type or "expense").strip().lower()
+    if t not in ("expense", "payment"):
+        raise ValueError("Tipo de movimiento inválido")
+    return t
+
+
 def _apply_payment_to_card(conn, card_id: int, amount: float):
-    remaining = amount
+    revolving = _card_revolving_total(conn, card_id)
+    remaining = min(amount, revolving)
     cats = conn.execute(
         """SELECT id, amount FROM card_categories
            WHERE card_id = ? AND amount > 0 AND COALESCE(kind, 'spend') = 'spend'
@@ -496,18 +513,26 @@ def _reverse_transaction_on_card(conn, tx: dict):
 
 
 def _reverse_payment_to_card(conn, card_id: int, amount: float, person_id: int | None, cat_name: str):
-    """Restore a deleted/edited payment to the transaction category."""
-    _add_to_category(conn, card_id, cat_name or "Pagos revertidos", amount, person_id)
+    """Restore a deleted/edited payment to revolving spend."""
+    _add_to_category(conn, card_id, "Pagos revertidos", amount, person_id)
 
 
 def add_transaction(date: str, amount: float, description: str, category: str, card_id: int | None, person_id: int | None, type: str):
+    if amount <= 0:
+        raise ValueError("El monto debe ser mayor a cero")
+    tx_type = _normalize_tx_type(type)
     conn = get_db()
+    if tx_type == "payment" and card_id:
+        revolving = _card_revolving_total(conn, card_id)
+        if amount > revolving + 0.01:
+            conn.close()
+            raise ValueError(f"El pago excede el saldo revolvente (${revolving:,.2f})")
     conn.execute(
         """INSERT INTO transactions (date, amount, description, category, card_id, person_id, type)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (date, amount, description, category, card_id, person_id, type),
+        (date, amount, description, category, card_id, person_id, tx_type),
     )
-    _apply_transaction_to_card(conn, card_id, amount, category, person_id, type)
+    _apply_transaction_to_card(conn, card_id, amount, category, person_id, tx_type)
     conn.commit()
     conn.close()
 
@@ -522,6 +547,9 @@ def update_transaction(
     person_id: int | None,
     type: str,
 ):
+    if amount <= 0:
+        raise ValueError("El monto debe ser mayor a cero")
+    tx_type = _normalize_tx_type(type)
     conn = get_db()
     old = conn.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone()
     if not old:
@@ -529,14 +557,28 @@ def update_transaction(
         return False
     old_tx = dict(old)
     _reverse_transaction_on_card(conn, old_tx)
+    if tx_type == "payment" and card_id:
+        revolving = _card_revolving_total(conn, card_id)
+        if amount > revolving + 0.01:
+            _apply_transaction_to_card(
+                conn,
+                old_tx["card_id"],
+                old_tx["amount"],
+                old_tx.get("category") or "",
+                old_tx.get("person_id"),
+                old_tx["type"],
+            )
+            conn.commit()
+            conn.close()
+            raise ValueError(f"El pago excede el saldo revolvente (${revolving:,.2f})")
     conn.execute(
         """UPDATE transactions
            SET date = ?, amount = ?, description = ?, category = ?,
                card_id = ?, person_id = ?, type = ?
            WHERE id = ?""",
-        (date, amount, description, category, card_id, person_id, type, tx_id),
+        (date, amount, description, category, card_id, person_id, tx_type, tx_id),
     )
-    _apply_transaction_to_card(conn, card_id, amount, category, person_id, type)
+    _apply_transaction_to_card(conn, card_id, amount, category, person_id, tx_type)
     conn.commit()
     conn.close()
     return True
@@ -655,10 +697,7 @@ def get_investments():
         snapshot_dict["total_commission"] = net["sell_commission"]
         snapshot_dict["total_iva"] = net["sell_iva"]
 
-    try:
-        terminal = get_terminal_context(holdings_list)
-    except Exception:
-        terminal = get_terminal_context(holdings_list)
+    terminal = get_terminal_context(holdings_list)
 
     return {
         "snapshot": snapshot_dict,

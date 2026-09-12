@@ -98,6 +98,20 @@ function formatQuotePrice(value, kind) {
   return bbFmt(n);
 }
 
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function safeHttpUrl(u) {
+  try {
+    const url = new URL(u, location.origin);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '#';
+  } catch (_) {
+    return '#';
+  }
+}
+
 function bbFmt(n, dec = 2) {
   if (n == null || n === '' || isNaN(n)) return '—';
   if (Math.abs(n) >= 10000) return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -643,6 +657,11 @@ async function loadSymbol(symbol, period) {
   try {
     const chartRes = await fetch(`/api/terminal/chart?symbol=${encodeURIComponent(reqSym)}&period=${reqPeriod}${cmp}`);
     if (loadId !== BB._loadId || reqSym !== BB.symbol) return;
+    if (!chartRes.ok) {
+      if (statusEl) statusEl.textContent = `Error ${chartRes.status} al cargar gráfica`;
+      setChartLoading(false);
+      return;
+    }
     const chartData = await chartRes.json();
     if (chartData.error) {
       if (statusEl) statusEl.textContent = chartData.error;
@@ -660,6 +679,7 @@ async function loadSymbol(symbol, period) {
 
     const quoteRes = await fetch(`/api/terminal/quote?symbol=${encodeURIComponent(reqSym)}`);
     if (loadId !== BB._loadId || reqSym !== BB.symbol) return;
+    if (!quoteRes.ok) return;
     const quote = await quoteRes.json();
     updateSymbolHeader(quote, chartData);
 
@@ -691,9 +711,9 @@ function renderNews(items) {
   const el = document.getElementById('bbNews');
   if (!el) return;
   el.innerHTML = (items || []).map(n => `
-    <a href="${n.url || '#'}" class="bb-news-item bb-enter" target="_blank" rel="noopener">
-      <div class="bb-news-meta">${(n.published_at || '').slice(0,16).replace('T',' ')} · ${n.publisher || ''}</div>
-      <div class="bb-news-title">${n.title}</div>
+    <a href="${safeHttpUrl(n.url)}" class="bb-news-item bb-enter" target="_blank" rel="noopener noreferrer">
+      <div class="bb-news-meta">${escHtml((n.published_at || '').slice(0, 16).replace('T', ' '))} · ${escHtml(n.publisher)}</div>
+      <div class="bb-news-title">${escHtml(n.title)}</div>
     </a>`).join('') || '<p style="padding:.5rem;color:var(--bb-muted)">Sin noticias</p>';
   staggerChildren(el, '.bb-news-item', 'bb-enter');
 }
@@ -750,9 +770,9 @@ function renderWatchlist(items) {
     const rowCls = isIndices ? 'bb-watch-row--index' : (isFx ? 'bb-watch-row--fx' : '');
     const badge = (isIndices || isFx) && i.board
       ? `<span class="bb-watch-badge bb-watch-badge--${i.board}">${(i.board_title || i.board).slice(0, 4)}</span>` : '';
-    return `<button type="button" class="bb-watch-row ${rowCls} ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${i.symbol}" data-board="${i.board}">
-      <span class="bb-watch-sym">${badge}${i.symbol}</span>
-      <span class="bb-watch-name">${(i.name || '').slice(0, 16)}</span>
+    return `<button type="button" class="bb-watch-row ${rowCls} ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}" data-board="${escHtml(i.board)}">
+      <span class="bb-watch-sym">${badge}${escHtml(i.symbol)}</span>
+      <span class="bb-watch-name">${escHtml((i.name || '').slice(0, 16))}</span>
       <span class="bb-watch-right">${price ? `<span class="bb-watch-price">${price}</span>` : ''}<span class="bb-watch-chg ${pct >= 0 ? 'up' : 'down'}">${bbPct(pct)}</span></span>
     </button>`;
   };
@@ -796,11 +816,13 @@ function setupCommandBar() {
   if (!input || !results) return;
 
   let timer;
+  let cmdSeq = 0;
   input.addEventListener('input', () => {
     clearTimeout(timer);
     const q = input.value.trim();
     if (!q) { results.classList.remove('open'); return; }
     timer = setTimeout(async () => {
+      const seq = ++cmdSeq;
       let items;
       if (BB.workspace === 'indices') {
         await loadIndicesBoard();
@@ -817,11 +839,12 @@ function setupCommandBar() {
       } else {
         items = await searchCatalog(q);
       }
+      if (seq !== cmdSeq) return;
       results.innerHTML = items.map((i, idx) => `
-        <button type="button" class="bb-cmd-item ${idx === 0 ? 'active' : ''}" data-symbol="${i.symbol}">
-          <span class="bb-cmd-sym">${i.symbol}</span>
-          <span>${(i.name || '').slice(0, 32)}</span>
-          <span class="bb-cmd-board">${i.board_title || ''}</span>
+        <button type="button" class="bb-cmd-item ${idx === 0 ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}">
+          <span class="bb-cmd-sym">${escHtml(i.symbol)}</span>
+          <span>${escHtml((i.name || '').slice(0, 32))}</span>
+          <span class="bb-cmd-board">${escHtml(i.board_title || '')}</span>
         </button>`).join('');
       results.classList.add('open');
       results.querySelectorAll('.bb-cmd-item').forEach(btn => {
@@ -1058,6 +1081,7 @@ function setupKeyboard() {
       if (e.key === 'Escape') e.target.blur();
       return;
     }
+    if (document.querySelector('.bb-kbd-overlay.open, .bb-pos-modal.open')) return;
     if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
       document.getElementById('bbCommand')?.focus();
@@ -1200,7 +1224,19 @@ async function loadDefaultCatalog() {
   } catch (_) {}
 }
 
+let liveRefreshPromise = null;
+
 async function refreshLive() {
+  if (liveRefreshPromise) return liveRefreshPromise;
+  liveRefreshPromise = refreshLiveInner();
+  try {
+    await liveRefreshPromise;
+  } finally {
+    liveRefreshPromise = null;
+  }
+}
+
+async function refreshLiveInner() {
   let syms;
   if (BB.workspace === 'indices') {
     await loadIndicesBoard(true);

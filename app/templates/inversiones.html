@@ -2,7 +2,7 @@
 {% block title %}Terminal BMV — Finanzas{% endblock %}
 {% block page_title %}Terminal de mercados{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/terminal.css?v=34">
+<link rel="stylesheet" href="/static/terminal.css?v=35">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 {% endblock %}
 {% block content %}
@@ -321,8 +321,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/terminal.js?v=34"></script>
-<script src="/static/terminal-layout.js?v=34"></script>
+<script src="/static/terminal.js?v=35"></script>
+<script src="/static/terminal-layout.js?v=35"></script>
 <script>
 const BB_INIT = {
   symbol: {{ (data.terminal.default_symbol if data.terminal is defined else 'IPC') | tojson }},

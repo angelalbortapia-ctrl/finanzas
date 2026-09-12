@@ -40,23 +40,23 @@ def compute_live_finances(conn=None) -> dict:
     own_conn = conn is None
     if own_conn:
         conn = get_db()
+    try:
+        card_debt = _card_debt(conn)
+        inv = _investment_snapshot(conn)
+        gbm_live = float(inv["market_value"]) if inv else 0.0
 
-    card_debt = _card_debt(conn)
-    inv = _investment_snapshot(conn)
-    gbm_live = float(inv["market_value"]) if inv else 0.0
+        latest = _latest_patrimony_row(conn)
+        afore = float(latest["afore"]) if latest else 0.0
+        infonavit = float(latest["infonavit"]) if latest else 0.0
+        ppr = float(latest["ppr"]) if latest else 0.0
+        business = float(latest["business"]) if latest else 0.0
 
-    latest = _latest_patrimony_row(conn)
-    afore = float(latest["afore"]) if latest else 0.0
-    infonavit = float(latest["infonavit"]) if latest else 0.0
-    ppr = float(latest["ppr"]) if latest else 0.0
-    business = float(latest["business"]) if latest else 0.0
-
-    gbm_asset = gbm_live if inv is not None else (float(latest["gbm"]) if latest else 0.0)
-    total_assets = gbm_asset + afore + infonavit + ppr + business
-    unified_net = total_assets - card_debt
-
-    if own_conn:
-        conn.close()
+        gbm_asset = gbm_live if inv is not None else (float(latest["gbm"]) if latest else 0.0)
+        total_assets = gbm_asset + afore + infonavit + ppr + business
+        unified_net = total_assets - card_debt
+    finally:
+        if own_conn:
+            conn.close()
 
     return {
         "gbm_live": gbm_asset,
