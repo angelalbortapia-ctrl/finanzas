@@ -1366,6 +1366,13 @@ async function refreshLiveInner() {
 }
 
 function updatePortfolio(port) {
+  const metaEl = document.getElementById('psPriceMeta');
+  const pm = port?.price_meta || {};
+  const snap = port?.snapshot || {};
+  const label = snap.price_label || pm.source_label || 'snapshot';
+  const age = pm.fetched_age || '';
+  if (metaEl) metaEl.textContent = age ? `${label} · ${age}` : label;
+
   if (!port?.snapshot) return;
   const s = port.snapshot;
   const prevSnap = BB.lastSnapshot || {};

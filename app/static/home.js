@@ -67,4 +67,8 @@ function initHomeTerminal() {
 
 document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('bbHome')) initHomeTerminal();
+  if (document.getElementById('bbPage') && document.getElementById('homeMarketStatus')) {
+    refreshHomeClock();
+    setInterval(refreshHomeClock, 5000);
+  }
 });

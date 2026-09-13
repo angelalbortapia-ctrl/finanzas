@@ -6,7 +6,7 @@ const PRECACHE = [
   '/static/sw.js?v=42',
   '/static/charts.js?v=13',
   '/static/terminal.css?v=38',
-  '/static/terminal.js?v=38',
+  '/static/terminal.js?v=39',
   '/static/terminal-layout.js?v=38',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',

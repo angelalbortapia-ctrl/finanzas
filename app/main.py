@@ -13,7 +13,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.config import USER_NAME
+from app.auth import COOKIE_NAME, check_pin, pin_enabled, pin_middleware
+from app.config import FINANZAS_PIN, USER_NAME
 from app.database import get_db, init_db
 from app.gbm import has_investment_data, import_from_excel as import_gbm_excel
 from app.google_sync import get_google_status, log_sync_error, sync_from_google
@@ -46,7 +47,7 @@ from app.queries import (
     update_other_expense,
 )
 from app.bmv_board import get_board_quotes, get_fx_quotes, get_indices_quotes
-from app.logos import get_logo_fast, get_logos_batch, is_safe_logo_url
+from app.logos import enqueue_logo_resolve, get_logo_fast, get_logos_batch, is_safe_logo_url
 from app.terminal import (
     get_chart_data,
     get_economic_calendar,
@@ -86,6 +87,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Finanzas", lifespan=lifespan)
+app.middleware("http")(pin_middleware)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 
@@ -101,6 +103,7 @@ templates.env.globals["current_year"] = date.today().year
 templates.env.globals["current_month"] = date.today().month
 templates.env.globals["source_label"] = source_label
 templates.env.globals["format_price_age"] = format_price_age
+templates.env.globals["pin_enabled"] = pin_enabled
 
 
 def _ctx(request: Request, page: str, **extra):
@@ -230,6 +233,7 @@ async def terminal_logo_api(symbol: str):
     url = info.get("url")
     if url and is_safe_logo_url(url):
         return RedirectResponse(url, status_code=302)
+    enqueue_logo_resolve(symbol)
     raise HTTPException(status_code=404, detail="Logo no disponible")
 
 
@@ -326,6 +330,25 @@ async def widgets_api():
         } if next_pay else None,
         "updated": date.today().isoformat(),
     }
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, next: str = "/"):
+    if not pin_enabled():
+        return RedirectResponse(next or "/", status_code=303)
+    return templates.TemplateResponse("login.html", _ctx(request, "login", next=next))
+
+
+@app.post("/login")
+async def login_submit(request: Request, pin: str = Form(...), next: str = Form("/")):
+    if not pin_enabled():
+        return RedirectResponse(next or "/", status_code=303)
+    if not check_pin(pin.strip()):
+        return RedirectResponse(f"/login?error=1&next={quote(next)}", status_code=303)
+    dest = next if next.startswith("/") else "/"
+    response = RedirectResponse(dest, status_code=303)
+    response.set_cookie(COOKIE_NAME, FINANZAS_PIN, httponly=True, samesite="lax", max_age=86400 * 30)
+    return response
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -531,7 +554,7 @@ async def investments_page(request: Request):
 @app.post("/inversiones/importar")
 async def import_gbm_route():
     try:
-        import_gbm_excel()
+        data = import_gbm_excel()
     except FileNotFoundError as exc:
         log_sync_error("excel", str(exc))
         return RedirectResponse(
@@ -541,6 +564,14 @@ async def import_gbm_route():
     except Exception as exc:
         log_sync_error("excel", str(exc))
         return RedirectResponse("/inversiones?error=import", status_code=303)
+    meta = data.get("_import_meta") or {}
+    removed = meta.get("removed") or []
+    if removed:
+        tickers = ", ".join(r["ticker"] for r in removed[:6])
+        return RedirectResponse(
+            f"/inversiones?imported=1&warn=removed&msg={quote(tickers)}",
+            status_code=303,
+        )
     return RedirectResponse("/inversiones?imported=1", status_code=303)
 
 

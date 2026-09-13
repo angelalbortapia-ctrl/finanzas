@@ -224,6 +224,7 @@ def get_dashboard():
         "savings_progress": savings_progress,
         "month_close": close_status,
         "live_finances": live,
+        "price_meta": get_price_meta(),
     }
 
 

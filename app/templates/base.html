@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Finanzas{% endblock %}</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="/static/app.css?v=28">
   {% block extra_head %}{% endblock %}
   <link rel="manifest" href="/manifest.webmanifest">
@@ -69,7 +68,7 @@
   </header>
 
   <main class="shell">
-    {% if page != 'dashboard' and page != 'investments' %}
+    {% if page not in ('dashboard', 'investments', 'cards', 'patrimony', 'simulator', 'transactions', 'login') %}
     <header class="page-head">
       <div>
         <div class="page-greet"><span id="greeting">Hola</span>, <strong>{{ user_name }}</strong></div>
@@ -118,7 +117,10 @@
     <button type="button" class="pwa-install-close" id="pwa-install-dismiss" aria-label="Cerrar">×</button>
   </div>
 
+  {% if page in ('dashboard', 'patrimony', 'simulator', 'cards') %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="/static/charts.js?v=13"></script>
+  {% endif %}
   <script src="/static/app.js?v=29"></script>
   {% block scripts %}{% endblock %}
 </body>

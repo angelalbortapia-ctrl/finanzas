@@ -15,6 +15,17 @@
 </div>
 
 <div class="card reveal" style="max-width:560px">
+  <div class="card-head"><div class="card-title">PIN de escritura (opcional)</div></div>
+  <div class="card-body">
+    <p style="font-size:.88rem;color:var(--muted);margin-bottom:.5rem">
+      Para proteger POST (movimientos, importar Excel, etc.) en red local, define la variable de entorno
+      <code>FINANZAS_PIN</code> antes de arrancar el servidor. Sin PIN, cualquiera en tu red puede modificar datos.
+    </p>
+    <p style="font-size:.85rem;color:var(--muted)">Estado actual: <strong>{% if pin_enabled() %}activo{% else %}desactivado{% endif %}</strong></p>
+  </div>
+</div>
+
+<div class="card reveal" style="max-width:560px">
   <div class="card-head"><div class="card-title">Reimportar Excel de tarjetas</div></div>
   <div class="card-body">
     {% if request.query_params.get('ok') %}

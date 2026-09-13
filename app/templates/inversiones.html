@@ -14,7 +14,9 @@
 {% elif request.query_params.get('refreshed') %}
 <div class="bb-flash ok">✓ Precios actualizados</div>
 {% elif request.query_params.get('imported') %}
-<div class="bb-flash ok">✓ Portafolio importado desde Excel</div>
+<div class="bb-flash ok">✓ Portafolio importado desde Excel{% if request.query_params.get('warn') == 'removed' and request.query_params.get('msg') %} · eliminadas: {{ request.query_params.get('msg') }}{% endif %}</div>
+{% elif request.query_params.get('warn') == 'removed' %}
+<div class="bb-flash warn">Posiciones fuera del Excel eliminadas{% if request.query_params.get('msg') %}: {{ request.query_params.get('msg') }}{% endif %}</div>
 {% elif request.query_params.get('synced') %}
 <div class="bb-flash ok">✓ Sincronizado con Google Sheets</div>
 {% elif request.query_params.get('error') == 'prices' %}
@@ -236,7 +238,7 @@
 
     <section class="bb-panel bb-portfolio-panel">
       <div class="bb-pane-subhead">
-        <span>Mi portafolio · P&amp;L en vivo</span>
+        <span>Mi portafolio · <span id="psPriceMeta" class="bb-price-tag">{% set pm = data.price_meta or {} %}{{ pm.source_label or 'snapshot' }} · {{ pm.fetched_age or 'sin actualizar' }}</span></span>
         <div class="bb-head-actions">
           <form action="/inversiones/importar" method="post" class="inline-form"><button type="submit" class="bb-tool-btn">Excel</button></form>
           <a href="/exportar/portafolio.csv" class="bb-tool-btn">CSV</a>
@@ -326,7 +328,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/terminal.js?v=38"></script>
+<script src="/static/terminal.js?v=39"></script>
 <script src="/static/terminal-layout.js?v=38"></script>
 <script>
 const BB_INIT = {

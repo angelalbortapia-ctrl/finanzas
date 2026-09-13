@@ -17,3 +17,5 @@ GOOGLE_CREDENTIALS_PATH = Path(os.environ.get(
 FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY", "")
 # Optional: Banxico SIE token for live TIIE (https://www.banxico.org.mx/SieAPIRest/)
 BANXICO_API_KEY = os.environ.get("BANXICO_API_KEY", "")
+# Optional: 4+ digit PIN to protect POST routes on LAN (leave empty to disable)
+FINANZAS_PIN = os.environ.get("FINANZAS_PIN", "")

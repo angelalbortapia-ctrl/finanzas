@@ -20,8 +20,17 @@ from app.queries import (
 )
 from app.simulator import simulate_payoff
 from app.bmv_board import get_board_quotes
-from app.logos import LOGO_OVERRIDES, get_logo_fast, get_symbol_logo, is_safe_logo_url
-from app.terminal import _compute_indicators, get_economic_calendar, get_fx_panel, get_live_quotes, get_market_status
+from app.auth import check_pin, pin_enabled
+from app.logos import LOGO_OVERRIDES, enqueue_logo_resolve, get_logo_fast, get_symbol_logo, is_safe_logo_url
+from app.market import get_price_meta
+from app.terminal import (
+    _compute_indicators,
+    get_economic_calendar,
+    get_fx_panel,
+    get_live_quotes,
+    get_market_status,
+    get_portfolio_live,
+)
 
 
 class SmokeTests(unittest.TestCase):
@@ -178,6 +187,55 @@ class SmokeTests(unittest.TestCase):
         a = get_board_quotes()
         b = get_board_quotes()
         self.assertEqual(a.get("fetched_at"), b.get("fetched_at"))
+
+    def test_pin_disabled_by_default(self):
+        self.assertFalse(pin_enabled())
+        self.assertFalse(check_pin("1234"))
+
+    def test_get_price_meta_shape(self):
+        meta = get_price_meta()
+        self.assertIn("source_label", meta)
+        self.assertIn("fetched_age", meta)
+        self.assertIn("breakdown", meta)
+
+    def test_portfolio_live_snapshot_mode(self):
+        port = get_portfolio_live()
+        self.assertIn("price_meta", port)
+        if port.get("snapshot"):
+            self.assertEqual(port["snapshot"]["price_mode"], "snapshot")
+
+    def test_enqueue_logo_resolve(self):
+        enqueue_logo_resolve("ZZZZTEST")
+        fast = get_logo_fast("ZZZZTEST")
+        self.assertIsNone(fast.get("url"))
+
+    def test_save_to_db_tracks_removed(self):
+        conn = get_db()
+        now = "2026-01-01T00:00:00"
+        conn.execute("DELETE FROM investment_holdings")
+        conn.execute(
+            """INSERT INTO investment_holdings
+               (ticker, name, shares, avg_cost, market_price, market_value, pnl, updated_at, price_source)
+               VALUES ('BMV:OLD', 'Old', 10, 100, 110, 1100, 100, ?, 'excel')""",
+            (now,),
+        )
+        conn.execute(
+            "INSERT INTO investment_snapshot (invested, market_value, cash, pnl, return_pct, updated_at) VALUES (1000, 1100, 0, 100, 10, ?)",
+            (now,),
+        )
+        conn.commit()
+        conn.close()
+        data = {
+            "snapshot": {"invested": 500, "market_value": 550, "cash": 0, "pnl": 50, "return_pct": 10},
+            "holdings": [{
+                "ticker": "BMV:NEW", "name": "New", "shares": 5, "avg_cost": 100,
+                "market_price": 110, "market_value": 550, "pnl": 50, "weight_pct": 100,
+            }],
+        }
+        meta = _save_to_db(data, "excel")
+        self.assertEqual(meta["imported"], 1)
+        self.assertEqual(len(meta["removed"]), 1)
+        self.assertEqual(meta["removed"][0]["ticker"], "BMV:OLD")
 
 
 if __name__ == "__main__":

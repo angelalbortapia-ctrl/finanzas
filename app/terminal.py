@@ -781,31 +781,29 @@ def get_market_news(limit: int = 30, symbol: str = "") -> list[dict]:
 
 
 def get_portfolio_live() -> dict:
+    """Portfolio from DB snapshot — same numbers as dashboard (refresh via /inversiones/refresh)."""
     from app.database import get_db
     from app.gbm_fees import enrich_holding
+    from app.market import get_price_meta, source_label
 
     conn = get_db()
     holdings = conn.execute(
         "SELECT * FROM investment_holdings WHERE shares > 0 ORDER BY market_value DESC"
     ).fetchall()
+    snap_row = conn.execute(
+        "SELECT * FROM investment_snapshot ORDER BY id DESC LIMIT 1"
+    ).fetchone()
     conn.close()
 
+    price_meta = get_price_meta()
     if not holdings:
-        return {"holdings": [], "snapshot": None}
-
-    symbols = [h["ticker"].replace("BMV:", "") for h in holdings]
-    quotes = get_live_quotes(symbols)
+        return {"holdings": [], "snapshot": None, "price_meta": price_meta}
 
     rows = []
     total_mv = total_inv = total_pnl = total_net = 0.0
     for h in holdings:
         row = dict(h)
         sym = row["ticker"].replace("BMV:", "")
-        q = quotes.get(sym, {})
-        if q.get("price"):
-            row["market_price"] = q["price"]
-            row["market_value"] = q["price"] * row["shares"]
-            row["pnl"] = row["market_value"] - row["avg_cost"] * row["shares"]
         enrich_holding(row)
         total_mv += row.get("market_value") or 0
         total_inv += (row.get("avg_cost") or 0) * (row.get("shares") or 0)
@@ -821,20 +819,42 @@ def get_portfolio_live() -> dict:
             "market_value": row["market_value"],
             "pnl": row["pnl"],
             "net_pnl": row.get("net_pnl", 0),
-            "change_pct": q.get("change_pct", 0),
+            "change_pct": 0,
+            "price_source": row.get("price_source"),
         })
 
-    return {
-        "holdings": rows,
-        "snapshot": {
+    if snap_row:
+        snap = dict(snap_row)
+        snapshot = {
+            "market_value": float(snap.get("market_value") or total_mv),
+            "invested": float(snap.get("invested") or total_inv),
+            "pnl": float(snap.get("pnl") or total_pnl),
+            "net_pnl": total_net,
+            "return_pct": float(snap.get("return_pct") or 0),
+            "net_return_pct": (total_net / total_inv * 100) if total_inv else 0,
+            "fetched_at": snap.get("price_fetched_at") or snap.get("updated_at"),
+            "price_source": snap.get("price_source"),
+            "price_label": source_label(snap.get("price_source") or "excel"),
+            "price_mode": "snapshot",
+        }
+    else:
+        snapshot = {
             "market_value": total_mv,
             "invested": total_inv,
             "pnl": total_pnl,
             "net_pnl": total_net,
             "return_pct": (total_pnl / total_inv * 100) if total_inv else 0,
             "net_return_pct": (total_net / total_inv * 100) if total_inv else 0,
-            "fetched_at": _now(),
-        },
+            "fetched_at": price_meta.get("fetched_at"),
+            "price_source": price_meta.get("source"),
+            "price_label": price_meta.get("source_label"),
+            "price_mode": "snapshot",
+        }
+
+    return {
+        "holdings": rows,
+        "snapshot": snapshot,
+        "price_meta": price_meta,
     }
 
 

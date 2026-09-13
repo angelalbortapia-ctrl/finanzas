@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -79,6 +80,8 @@ SPECIAL_LOGOS: dict[str, str] = {
 
 _mem_cache: dict[str, dict[str, Any]] = {}
 CACHE_SEC = 86400 * 7
+_resolve_lock = threading.Lock()
+_pending_resolve: set[str] = set()
 
 
 def is_safe_logo_url(url: str) -> bool:
@@ -235,12 +238,50 @@ def get_logo_fast(symbol: str) -> dict[str, Any]:
     return {"symbol": key, "url": url, "source": "override", "at": time.time()}
 
 
+def enqueue_logo_resolve(symbol: str) -> None:
+    """Resolve logo in a background thread (TV/Finnhub) without blocking requests."""
+    key = symbol.upper().replace("BMV:", "")
+    if not key:
+        return
+    if _cache_get(key) and _cache_get(key).get("url"):
+        return
+    with _resolve_lock:
+        if key in _pending_resolve:
+            return
+        _pending_resolve.add(key)
+
+    def _worker() -> None:
+        try:
+            get_symbol_logo(key)
+        except Exception as exc:
+            logger.debug("background logo resolve failed for %s: %s", key, exc)
+        finally:
+            with _resolve_lock:
+                _pending_resolve.discard(key)
+
+    threading.Thread(target=_worker, name=f"logo-{key}", daemon=True).start()
+
+
+def enqueue_logos_batch(symbols: list[str]) -> None:
+    for sym in symbols:
+        enqueue_logo_resolve(sym)
+
+
 def get_logos_batch(symbols: list[str], *, fast: bool = True) -> dict[str, str | None]:
     out: dict[str, str | None] = {}
+    missing: list[str] = []
     for sym in symbols:
         key = sym.upper().replace("BMV:", "")
         if not key:
             continue
-        info = get_logo_fast(key) if fast else get_symbol_logo(key)
-        out[key] = info.get("url")
+        if fast:
+            info = get_logo_fast(key)
+            url = info.get("url")
+            if not url:
+                missing.append(key)
+            out[key] = url
+        else:
+            out[key] = get_symbol_logo(key).get("url")
+    if fast and missing:
+        enqueue_logos_batch(missing)
     return out

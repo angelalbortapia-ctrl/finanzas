@@ -1,60 +1,82 @@
 {% extends "base.html" %}
 {% from "macros.html" import wallet_card %}
 {% block title %}Tarjetas — Finanzas{% endblock %}
-{% block page_title %}Tarjetas de crédito{% endblock %}
+{% block page_title %}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/home.css?v=2">
+{% endblock %}
 {% block content %}
 
-<div class="stats reveal">
-  <div class="stat"><div class="stat-label">Deuda total</div><div class="stat-val bad" data-count="{{ data.total_balance }}" data-prefix="$">$0</div></div>
-  <div class="stat"><div class="stat-label">Disponible</div><div class="stat-val good">{{ data.total_available | currency }}</div></div>
-  <div class="stat"><div class="stat-label">Línea total</div><div class="stat-val">{{ data.total_line | currency }}</div></div>
-  <div class="stat"><div class="stat-label">Uso</div><div class="stat-val {% if data.usage_pct >= 80 %}bad{% endif %}">{{ "%.1f"|format(data.usage_pct) }}%</div></div>
-</div>
-
-<div class="card reveal">
-  <div class="card-body">
-    <div class="cards-scroll">
-      {% for c in cards %}
-      {{ wallet_card(c.name, c.revolving_balance | currency, c.credit_line | currency, c.available | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
-      {% endfor %}
+<div class="bb-page" id="bbPage">
+  <header class="bb-page-bar">
+    <div>
+      <div class="bb-logo">FINANZAS <span>· TARJETAS</span></div>
+      <p class="bb-page-sub">{{ cards | length }} activas · {{ "%.0f"|format(data.usage_pct) }}% uso global</p>
     </div>
-  </div>
-</div>
+    <div class="bb-clock">
+      <div class="bb-market-status closed" id="homeMarketStatus">—</div>
+      <div id="homeClock">— CDMX</div>
+    </div>
+  </header>
 
-<div class="card reveal">
-  <div class="card-head">
-    <div class="card-title">Todas las tarjetas</div>
-    <a href="/simulador" class="btn btn-ghost btn-sm">Simulador</a>
+  <div class="bb-ticker bb-home-ticker" aria-hidden="true">
+    <div class="bb-ticker-track" id="homeTickerTrack"></div>
   </div>
-  <div class="card-body flush">
-    <table class="tbl">
-      <thead>
-        <tr><th>Tarjeta</th><th class="num">Saldo</th><th class="num">Disponible</th><th class="num">Línea</th><th class="num">Uso</th></tr>
-      </thead>
-      <tbody>
-        {% for c in cards %}
-        <tr class="clickable" onclick="location='/tarjetas/{{ c.id }}'">
-          <td><span class="sym">{{ c.name }}</span></td>
-          <td class="num bad">{{ c.balance | currency }}</td>
-          <td class="num good">{{ c.available | currency }}</td>
-          <td class="num">{{ c.credit_line | currency }}</td>
-          <td class="num"><span class="badge {% if c.usage_pct >= 80 %}badge-bad{% elif c.usage_pct >= 60 %}badge-warn{% else %}badge-good{% endif %}">{{ "%.0f"|format(c.usage_pct) }}%</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
 
-<div class="card reveal">
-  <div class="card-head"><div class="card-title">Agregar tarjeta</div></div>
-  <div class="card-body">
-    <form action="/tarjetas/nueva" method="post" class="form-grid">
-      <div class="field"><label>Nombre</label><input name="name" required placeholder="Ej. BBVA"></div>
-      <div class="field"><label>Línea de crédito</label><input name="credit_line" type="number" step="0.01" required></div>
-      <div class="field"><label>Titular</label><select name="person_id" required>{% for p in data.persons %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
-      <div class="field"><button type="submit" class="btn btn-primary btn-block">Agregar</button></div>
-    </form>
+  <div class="bb-page-kpis">
+    <div class="bb-page-kpi"><span class="bb-page-kpi-label">Deuda total</span><span class="bb-page-kpi-val bad">{{ data.total_balance | currency }}</span></div>
+    <div class="bb-page-kpi"><span class="bb-page-kpi-label">Revolvente</span><span class="bb-page-kpi-val bad">{{ data.total_revolving | currency }}</span></div>
+    <div class="bb-page-kpi"><span class="bb-page-kpi-label">Disponible</span><span class="bb-page-kpi-val good">{{ data.total_available | currency }}</span></div>
+    <div class="bb-page-kpi"><span class="bb-page-kpi-label">Línea total</span><span class="bb-page-kpi-val">{{ data.total_line | currency }}</span></div>
+  </div>
+
+  <div class="bb-page-body">
+    <section class="bb-panel">
+      <header class="bb-panel-head"><h2>Tus tarjetas</h2><a href="/simulador" class="bb-home-link">Simulador</a></header>
+      <div class="bb-panel-body-flush">
+        <div class="bb-home-cards">
+          {% for c in cards %}
+          {{ wallet_card(c.name, c.revolving_balance | currency, c.credit_line | currency, c.available | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="bb-panel">
+      <header class="bb-panel-head"><h2>Detalle</h2></header>
+      <div class="bb-panel-body-flush">
+        <table class="bb-tbl">
+          <thead><tr><th>Tarjeta</th><th class="num">Saldo</th><th class="num">Disponible</th><th class="num">Línea</th><th class="num">Uso</th></tr></thead>
+          <tbody>
+            {% for c in cards %}
+            <tr class="clickable" onclick="location='/tarjetas/{{ c.id }}'">
+              <td><span class="sym">{{ c.name }}</span></td>
+              <td class="num bad">{{ c.balance | currency }}</td>
+              <td class="num good">{{ c.available | currency }}</td>
+              <td class="num">{{ c.credit_line | currency }}</td>
+              <td class="num"><span class="bb-badge {% if c.usage_pct >= 80 %}bad{% elif c.usage_pct >= 60 %}warn{% else %}good{% endif %}">{{ "%.0f"|format(c.usage_pct) }}%</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="bb-panel">
+      <header class="bb-panel-head"><h2>Agregar tarjeta</h2></header>
+      <div class="bb-panel-body">
+        <form action="/tarjetas/nueva" method="post" class="bb-form-grid">
+          <div class="field"><label>Nombre</label><input name="name" required placeholder="Ej. BBVA"></div>
+          <div class="field"><label>Línea de crédito</label><input name="credit_line" type="number" step="0.01" required></div>
+          <div class="field"><label>Titular</label><select name="person_id" required>{% for p in data.persons %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+          <div class="field" style="align-self:end"><button type="submit" class="btn btn-primary btn-block">Agregar</button></div>
+        </form>
+      </div>
+    </section>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/home.js?v=2"></script>
 {% endblock %}

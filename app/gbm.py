@@ -125,7 +125,7 @@ def parse_gbm_sheets(portfolio_rows: list[list[Any]], monitor_rows: list[list[An
     }
 
 
-def _save_to_db(data: dict, source: str) -> None:
+def _save_to_db(data: dict, source: str) -> dict:
     holdings = data.get("holdings") or []
     if not holdings:
         raise ValueError("El import no contiene posiciones — no se modificó la base de datos")
@@ -177,6 +177,13 @@ def _save_to_db(data: dict, source: str) -> None:
             )
 
     placeholders = ",".join("?" * len(imported_tickers))
+    to_remove = conn.execute(
+        f"""SELECT ticker, name FROM investment_holdings
+            WHERE ticker NOT IN ({placeholders})
+              AND COALESCE(price_source, '') != 'manual'""",
+        imported_tickers,
+    ).fetchall()
+    removed = [dict(r) for r in to_remove]
     conn.execute(
         f"""DELETE FROM investment_holdings
             WHERE ticker NOT IN ({placeholders})
@@ -214,6 +221,7 @@ def _save_to_db(data: dict, source: str) -> None:
 
     record_portfolio_snapshot(snap["market_value"], snap["invested"], snap["pnl"], snap["return_pct"])
     seed_history_if_empty(snap["market_value"], snap["invested"], snap["pnl"], snap["return_pct"])
+    return {"imported": len(holdings), "removed": removed}
 
 
 def import_from_excel(path: Optional[Path] = None) -> dict:
@@ -222,7 +230,8 @@ def import_from_excel(path: Optional[Path] = None) -> dict:
     if not excel_path.exists():
         raise FileNotFoundError(f"No se encontró {excel_path}")
     data = parse_gbm_workbook(excel_path)
-    _save_to_db(data, "excel")
+    meta = _save_to_db(data, "excel")
+    data["_import_meta"] = meta
     return data
 
 

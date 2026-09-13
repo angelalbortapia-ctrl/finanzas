@@ -1,95 +1,101 @@
 {% extends "base.html" %}
 {% block title %}Simulador — Finanzas{% endblock %}
-{% block page_title %}Simulador de pagos{% endblock %}
+{% block page_title %}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/home.css?v=2">
+{% endblock %}
 {% block content %}
 
-<section class="hero reveal">
-  <div class="hero-label">Deuda total en tarjetas</div>
-  <div class="hero-amount" data-count="{{ total_debt }}" data-prefix="$">$0</div>
-  <div class="hero-meta"><span>{{ cards | length }} tarjetas · calcula tu plan de liquidación</span></div>
-</section>
+<div class="bb-page" id="bbPage">
+  <header class="bb-page-bar">
+    <div>
+      <div class="bb-logo">FINANZAS <span>· SIMULADOR</span></div>
+      <p class="bb-page-sub">{{ cards | length }} tarjetas · plan de liquidación</p>
+    </div>
+    <div style="text-align:right">
+      <div class="bb-page-hero" data-count="{{ total_debt }}" data-prefix="$">$0</div>
+      <div class="bb-page-hero-meta">Deuda revolvente total</div>
+    </div>
+  </header>
 
-<div class="split reveal">
-  <div>
-    <div class="card">
-      <div class="card-head"><div class="card-title">Configurar simulación</div></div>
-      <div class="card-body">
-        <form action="/simulador" method="post" class="form-grid">
-          <div class="field"><label>Pago mensual</label><input name="monthly_payment" type="number" step="100" min="100" value="{{ monthly_payment or 15000 }}" required></div>
-          <div class="field"><label>Tasa anual (%)</label><input name="apr" type="number" step="1" min="0" max="100" value="{{ apr or 45 }}" required></div>
-          <div class="field"><label>Estrategia</label>
-            <select name="strategy">
-              <option value="avalanche" {% if (strategy or 'avalanche') == 'avalanche' %}selected{% endif %}>Avalancha (mayor saldo)</option>
-              <option value="snowball" {% if strategy == 'snowball' %}selected{% endif %}>Bola de nieve (menor saldo)</option>
-            </select>
+  <div class="bb-page-grid">
+    <div class="bb-page-main">
+      <section class="bb-panel">
+        <header class="bb-panel-head"><h2>Configurar simulación</h2></header>
+        <div class="bb-panel-body">
+          <form action="/simulador" method="post" class="bb-form-grid">
+            <div class="field"><label>Pago mensual</label><input name="monthly_payment" type="number" step="100" min="100" value="{{ monthly_payment or 15000 }}" required></div>
+            <div class="field"><label>Tasa anual (%)</label><input name="apr" type="number" step="1" min="0" max="100" value="{{ apr or 45 }}" required></div>
+            <div class="field"><label>Estrategia</label>
+              <select name="strategy">
+                <option value="avalanche" {% if (strategy or 'avalanche') == 'avalanche' %}selected{% endif %}>Avalancha</option>
+                <option value="snowball" {% if strategy == 'snowball' %}selected{% endif %}>Bola de nieve</option>
+              </select>
+            </div>
+            <div class="field" style="align-self:end"><button type="submit" class="btn btn-primary btn-block">Simular</button></div>
+          </form>
+          <div class="presets" style="margin-top:.75rem;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;font-size:.72rem;color:var(--bb-muted)">
+            <span>Atajos:</span>
+            {% for amt in [5000, 10000, 15000, 20000, 30000] %}
+            <button type="button" class="btn btn-ghost btn-sm preset" data-amount="{{ amt }}">${{ "{:,.0f}".format(amt) }}</button>
+            {% endfor %}
           </div>
-          <div class="field"><button type="submit" class="btn btn-primary btn-block">Simular</button></div>
-        </form>
-        <div class="presets">
-          <span>Atajos:</span>
-          {% for amt in [5000, 10000, 15000, 20000, 30000] %}
-          <button type="button" class="preset" data-amount="{{ amt }}">${{ "{:,.0f}".format(amt) }}</button>
-          {% endfor %}
         </div>
-      </div>
+      </section>
+
+      {% if result and not result.get('error') and result.schedule %}
+      <section class="bb-panel">
+        <header class="bb-panel-head"><h2>Proyección · {{ result.schedule_full_len }} meses</h2></header>
+        <div class="bb-panel-body"><div class="chart"><canvas id="simChart"></canvas></div></div>
+        <div class="bb-panel-body-flush">
+          <table class="bb-tbl">
+            <thead><tr><th>Mes</th><th class="num">Pago</th><th class="num">Interés</th><th class="num">Restante</th></tr></thead>
+            <tbody>
+              {% for row in result.schedule %}
+              <tr>
+                <td>{{ row.month }}</td>
+                <td class="num">{{ row.payment | currency }}</td>
+                <td class="num bad">{{ row.interest | currency }}</td>
+                <td class="num">{{ row.remaining | currency }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% elif result and result.get('error') %}
+      <div class="bb-flash err">{{ result.error }}</div>
+      {% endif %}
     </div>
 
-    {% if result and not result.get('error') and result.schedule %}
-    <div class="card">
-      <div class="card-head"><div class="card-title">Proyección ({{ result.schedule_full_len }} meses)</div></div>
-      <div class="card-body"><div class="chart"><canvas id="simChart"></canvas></div></div>
-      <div class="card-body flush" style="padding-top:0">
-        <table class="tbl">
-          <thead><tr><th>Mes</th><th class="num">Pago</th><th class="num">Interés</th><th class="num">Restante</th></tr></thead>
-          <tbody>
-            {% for row in result.schedule %}
-            <tr>
-              <td>{{ row.month }}</td>
-              <td class="num">{{ row.payment | currency }}</td>
-              <td class="num bad">{{ row.interest | currency }}</td>
-              <td class="num">{{ row.remaining | currency }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {% endif %}
+    <aside class="bb-page-side">
+      <section class="bb-panel">
+        <header class="bb-panel-head"><h2>Tus tarjetas</h2></header>
+        <div class="bb-panel-body-flush">
+          <table class="bb-tbl">
+            <tbody>
+              {% for c in cards %}
+              <tr><td><span class="sym">{{ c.name }}</span></td><td class="num bad">{{ c.balance | currency }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {% if result and not result.get('error') %}
+      <section class="bb-panel">
+        <div class="bb-panel-body" style="text-align:center;padding:1.25rem .7rem">
+          <div style="font-family:var(--bb-mono);font-size:2.5rem;font-weight:700;color:var(--bb-amber)">{{ result.months }}</div>
+          <div style="font-size:.72rem;color:var(--bb-muted);text-transform:uppercase;letter-spacing:.1em">meses para liquidar</div>
+          <div style="margin-top:1rem;display:grid;gap:.5rem;text-align:left;font-size:.78rem">
+            <div><span class="sub">Total pagado</span><br><strong style="font-family:var(--bb-mono)">{{ result.total_paid | currency }}</strong></div>
+            <div><span class="sub">Intereses</span><br><strong class="bad" style="font-family:var(--bb-mono)">{{ result.total_interest | currency }}</strong></div>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+    </aside>
   </div>
-
-  <aside>
-    <div class="card">
-      <div class="card-head"><div class="card-title">Tus tarjetas</div></div>
-      <div class="card-body flush">
-        <table class="tbl">
-          <tbody>
-            {% for c in cards %}
-            <tr><td><span class="sym">{{ c.name }}</span></td><td class="num bad">{{ c.balance | currency }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    {% if result and not result.get('error') %}
-    <div class="card">
-      <div class="card-body sim-hero">
-        <div class="sim-months">{{ result.months }}</div>
-        <div class="sim-label">meses para liquidar</div>
-        <div class="sim-grid">
-          <div class="sim-item"><div class="sim-item-label">Total pagado</div><div class="sim-item-val">{{ result.total_paid | currency }}</div></div>
-          <div class="sim-item"><div class="sim-item-label">Intereses</div><div class="sim-item-val bad">{{ result.total_interest | currency }}</div></div>
-          <div class="sim-item"><div class="sim-item-label">Pago/mes</div><div class="sim-item-val">{{ result.monthly_payment | currency }}</div></div>
-          <div class="sim-item"><div class="sim-item-label">Estrategia</div><div class="sim-item-val" style="font-size:.85rem">{{ 'Avalancha' if result.strategy == 'avalanche' else 'Bola de nieve' }}</div></div>
-        </div>
-      </div>
-    </div>
-    {% elif result and result.get('error') %}
-    <div class="card"><div class="card-body"><div class="alert alert-bad">{{ result.error }}</div></div></div>
-    {% else %}
-    <div class="card"><div class="card-body" style="color:var(--muted);font-size:.88rem">Ingresa un monto mensual y presiona simular.</div></div>
-    {% endif %}
-  </aside>
 </div>
 {% endblock %}
 
@@ -99,17 +105,25 @@ document.querySelectorAll('.preset').forEach(btn => {
   btn.addEventListener('click', () => { document.querySelector('[name=monthly_payment]').value = btn.dataset.amount; });
 });
 {% if result and not result.get('error') and result.schedule %}
+const chartGrid = 'rgba(26, 33, 48, 0.6)';
+const chartText = '#6d7788';
 const schedule = {{ result.schedule | tojson }};
 initAnimatedChart(document.getElementById('simChart'), () => ({
   type: 'line',
   data: {
     labels: schedule.map(r => 'Mes ' + r.month),
     datasets: [
-      { label: 'Saldo', data: schedule.map(r => r.remaining), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,.06)', fill: true, tension: .35, borderWidth: 2.5 },
-      { label: 'Interés', data: schedule.map(r => r.interest), borderColor: '#d97706', borderDash: [4,4], tension: .35, borderWidth: 2 },
+      { label: 'Saldo', data: schedule.map(r => r.remaining), borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,.08)', fill: true, tension: .35, borderWidth: 2.5 },
+      { label: 'Interés', data: schedule.map(r => r.interest), borderColor: '#fbbf24', borderDash: [4,4], tension: .35, borderWidth: 2 },
     ],
   },
-  options: chartDefaults(),
+  options: {
+    ...chartDefaults(),
+    scales: {
+      x: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
+      y: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
+    },
+  },
 }));
 {% endif %}
 </script>
