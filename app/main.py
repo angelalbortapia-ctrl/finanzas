@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -46,6 +46,7 @@ from app.queries import (
     update_other_expense,
 )
 from app.bmv_board import get_board_quotes, get_fx_quotes, get_indices_quotes
+from app.logos import get_logo_fast, get_logos_batch, is_safe_logo_url
 from app.terminal import (
     get_chart_data,
     get_economic_calendar,
@@ -221,6 +222,21 @@ async def terminal_live_api(symbols: str = ""):
 @app.get("/api/terminal/portfolio")
 async def terminal_portfolio_api():
     return get_portfolio_live()
+
+
+@app.get("/api/terminal/logo/{symbol}")
+async def terminal_logo_api(symbol: str):
+    info = get_logo_fast(symbol)
+    url = info.get("url")
+    if url and is_safe_logo_url(url):
+        return RedirectResponse(url, status_code=302)
+    raise HTTPException(status_code=404, detail="Logo no disponible")
+
+
+@app.get("/api/terminal/logos")
+async def terminal_logos_api(symbols: str = ""):
+    syms = [s.strip() for s in symbols.split(",") if s.strip()]
+    return {"logos": get_logos_batch(syms[:80])}
 
 
 @app.post("/api/meta-pago")

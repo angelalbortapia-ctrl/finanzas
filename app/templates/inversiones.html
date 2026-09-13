@@ -2,7 +2,7 @@
 {% block title %}Terminal BMV — Finanzas{% endblock %}
 {% block page_title %}Terminal de mercados{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/terminal.css?v=35">
+<link rel="stylesheet" href="/static/terminal.css?v=38">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 {% endblock %}
 {% block content %}
@@ -114,6 +114,11 @@
       <div class="bb-panel-head bb-chart-head">
         <h2>Gráfica</h2>
         <div class="bb-symbol-block bb-symbol-block--compact" id="bbSymbolBlock">
+          <span class="bb-watch-logo-wrap" id="bbSymLogoWrap">
+            <img class="bb-watch-logo" id="bbSymLogo" src="/api/terminal/logo/{{ term.default_symbol or 'IPC' }}" alt=""
+              onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
+            <span class="bb-watch-logo-fb" aria-hidden="true">{{ (term.default_symbol or 'IPC')[:2] }}</span>
+          </span>
           <span class="bb-symbol-name" id="bbSymName">{{ term.default_symbol or 'IPC' }}</span>
           <span class="bb-symbol-price" id="bbSymPrice">—</span>
           <span class="bb-symbol-chg" id="bbSymChg"></span>
@@ -321,8 +326,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/terminal.js?v=35"></script>
-<script src="/static/terminal-layout.js?v=35"></script>
+<script src="/static/terminal.js?v=38"></script>
+<script src="/static/terminal-layout.js?v=38"></script>
 <script>
 const BB_INIT = {
   symbol: {{ (data.terminal.default_symbol if data.terminal is defined else 'IPC') | tojson }},

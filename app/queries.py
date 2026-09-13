@@ -11,7 +11,6 @@ from app.finances import (
     net_change_from_history,
 )
 from app.history import get_portfolio_history
-from app.bmv_board import get_board_quotes
 from app.gbm_fees import aggregate_net_totals, enrich_holding
 from app.market import get_price_meta, source_label
 from app.terminal import get_terminal_context
@@ -739,38 +738,40 @@ def upsert_holding(ticker: str, name: str, shares: float, avg_cost: float) -> No
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_db()
     try:
-        q = fetch_quote(conn, ticker, force=True)
-    except Exception:
-        q = None
-    market_price = q.price if q else avg_cost
-    price_source = "manual"
-    price_fetched_at = q.fetched_at if q else now
-    market_value = shares * market_price
-    pnl = market_value - shares * avg_cost
+        try:
+            q = fetch_quote(conn, ticker, force=True)
+        except Exception:
+            q = None
+        market_price = q.price if q else avg_cost
+        price_source = "manual"
+        price_fetched_at = q.fetched_at if q else now
+        market_value = shares * market_price
+        pnl = market_value - shares * avg_cost
 
-    existing = conn.execute(
-        "SELECT id FROM investment_holdings WHERE ticker = ?", (ticker,)
-    ).fetchone()
-    if existing:
-        conn.execute(
-            """UPDATE investment_holdings
-               SET name = ?, shares = ?, avg_cost = ?, market_price = ?, market_value = ?,
-                   pnl = ?, updated_at = ?, price_source = ?, price_fetched_at = ?
-               WHERE ticker = ?""",
-            (name.strip(), shares, avg_cost, market_price, market_value, pnl,
-             now, price_source, price_fetched_at, ticker),
-        )
-    else:
-        conn.execute(
-            """INSERT INTO investment_holdings
-               (ticker, name, shares, avg_cost, market_price, market_value, pnl,
-                weight_pct, updated_at, price_source, price_fetched_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
-            (ticker, name.strip(), shares, avg_cost, market_price, market_value, pnl,
-             now, price_source, price_fetched_at),
-        )
-    conn.commit()
-    conn.close()
+        existing = conn.execute(
+            "SELECT id FROM investment_holdings WHERE ticker = ?", (ticker,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """UPDATE investment_holdings
+                   SET name = ?, shares = ?, avg_cost = ?, market_price = ?, market_value = ?,
+                       pnl = ?, updated_at = ?, price_source = ?, price_fetched_at = ?
+                   WHERE ticker = ?""",
+                (name.strip(), shares, avg_cost, market_price, market_value, pnl,
+                 now, price_source, price_fetched_at, ticker),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO investment_holdings
+                   (ticker, name, shares, avg_cost, market_price, market_value, pnl,
+                    weight_pct, updated_at, price_source, price_fetched_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
+                (ticker, name.strip(), shares, avg_cost, market_price, market_value, pnl,
+                 now, price_source, price_fetched_at),
+            )
+        conn.commit()
+    finally:
+        conn.close()
     refresh_holdings()
 
 

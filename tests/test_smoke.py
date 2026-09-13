@@ -19,6 +19,8 @@ from app.queries import (
     infer_category_kind,
 )
 from app.simulator import simulate_payoff
+from app.bmv_board import get_board_quotes
+from app.logos import LOGO_OVERRIDES, get_logo_fast, get_symbol_logo, is_safe_logo_url
 from app.terminal import _compute_indicators, get_economic_calendar, get_fx_panel, get_live_quotes, get_market_status
 
 
@@ -160,6 +162,22 @@ class SmokeTests(unittest.TestCase):
         self.assertIsNotNone(tiie)
         self.assertEqual(tiie["unit"], "%")
         self.assertIsNotNone(tiie["price"])
+
+    def test_logo_override(self):
+        self.assertIn("GFNORTEO", LOGO_OVERRIDES)
+        info = get_symbol_logo("GFNORTEO")
+        self.assertEqual(info["symbol"], "GFNORTEO")
+        self.assertIn("banorte", info.get("url") or "")
+        self.assertEqual(info.get("source"), "override")
+        fast = get_logo_fast("GFNORTEO")
+        self.assertIn("banorte", fast.get("url") or "")
+        self.assertTrue(is_safe_logo_url(fast["url"]))
+        self.assertFalse(is_safe_logo_url("https://evil.example/logo.svg"))
+
+    def test_board_quotes_cached(self):
+        a = get_board_quotes()
+        b = get_board_quotes()
+        self.assertEqual(a.get("fetched_at"), b.get("fetched_at"))
 
 
 if __name__ == "__main__":

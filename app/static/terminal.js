@@ -409,9 +409,13 @@ function destroyCharts() {
 function renderCharts(data) {
   const chartEl = document.getElementById('bbChart');
   const volEl = document.getElementById('bbVolChart');
-  if (!chartEl || !data?.points?.length) return;
+  if (!chartEl || !data?.points?.length) {
+    setChartLoading(false);
+    return;
+  }
   if (typeof LightweightCharts === 'undefined') {
     chartEl.innerHTML = '<p style="padding:1rem;color:var(--bb-muted)">Gráfica no disponible (sin conexión al CDN)</p>';
+    setChartLoading(false);
     return;
   }
 
@@ -559,8 +563,22 @@ function updateSymbolHeader(quote, chartData) {
   const sym = quote?.symbol || chartData?.symbol || BB.symbol;
   const meta = indexMeta(sym);
   const kind = meta?.kind || quote?.kind;
+  const logo = document.getElementById('bbSymLogo');
+  if (logo) {
+    const symAtSet = (sym || '').replace('BMV:', '').toUpperCase();
+    logo.src = logoSrc(sym);
+    logo.alt = sym;
+    logo.style.display = '';
+    logo.parentElement?.classList.remove('bb-watch-logo-wrap--fb');
+    logo.onerror = () => {
+      const current = (BB.symbol || '').replace('BMV:', '').toUpperCase();
+      if (symAtSet !== current) return;
+      logo.style.display = 'none';
+      logo.parentElement?.classList.add('bb-watch-logo-wrap--fb');
+    };
+  }
   name.textContent = sym;
-  desc.textContent = quote?.name || chartData?.name || meta?.name || '';
+  if (desc) desc.textContent = quote?.name || chartData?.name || meta?.name || '';
   const p = quote?.price ?? chartData?.last;
   const pct = quote?.change_pct ?? chartData?.change_pct ?? 0;
   price.textContent = formatQuotePrice(p, kind);
@@ -668,7 +686,7 @@ async function loadSymbol(symbol, period) {
       setChartLoading(false);
     } else {
       if (chartData.period_fallback && statusEl) {
-        statusEl.textContent = `Periodo "${chartData.period_requested}" no disponible — reinicia el servidor`;
+        statusEl.textContent = `Mostrando ${chartData.period} (solicitado: ${chartData.period_requested})`;
       } else if (statusEl) {
         statusEl.textContent = '';
       }
@@ -718,6 +736,23 @@ function renderNews(items) {
   staggerChildren(el, '.bb-news-item', 'bb-enter');
 }
 
+function logoSrc(symbol) {
+  const sym = (symbol || '').replace('BMV:', '').toUpperCase();
+  return `/api/terminal/logo/${encodeURIComponent(sym)}`;
+}
+
+function logoHtml(symbol, extraCls = '') {
+  const sym = (symbol || '').replace('BMV:', '').toUpperCase();
+  const init = escHtml(sym.slice(0, 2));
+  const src = escHtml(logoSrc(sym));
+  const cls = extraCls ? ` ${extraCls}` : '';
+  return `<span class="bb-watch-logo-wrap${cls}" data-symbol="${escHtml(sym)}">
+    <img class="bb-watch-logo" src="${src}" alt="" loading="lazy"
+      onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
+    <span class="bb-watch-logo-fb" aria-hidden="true">${init}</span>
+  </span>`;
+}
+
 function activeWatchBoard() {
   const tabsId = BB.workspace === 'indices'
     ? 'bbWatchTabsIndices'
@@ -747,16 +782,18 @@ function renderWatchlist(items) {
   if (q) list = list.filter(i => i.symbol.includes(q) || (i.name || '').toUpperCase().includes(q));
   list = list.slice(0, 80);
 
-  let html = '';
   const holdings = (isIndices || isFx) ? [] : (window.BB_INIT?.holdings || []);
+
+  let html = '';
   if (holdings.length) {
     html += '<div class="bb-watch-divider">Portafolio</div>';
     holdings.forEach(h => {
       const sym = (h.ticker || '').replace('BMV:', '');
       const pnl = h.pnl || 0;
-      html += `<button type="button" class="bb-watch-row ${sym === BB.symbol ? 'active' : ''}" data-symbol="${sym}">
-        <span class="bb-watch-sym">${sym}</span>
-        <span class="bb-watch-name">${(h.name || '').slice(0,14)}</span>
+      html += `<button type="button" class="bb-watch-row ${sym === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(sym)}">
+        ${logoHtml(sym)}
+        <span class="bb-watch-sym">${escHtml(sym)}</span>
+        <span class="bb-watch-name">${escHtml((h.name || '').slice(0, 14))}</span>
         <span class="bb-watch-right"><span class="bb-watch-chg ${pnl >= 0 ? 'up' : 'down'}">${bbFmt(pnl)}</span></span>
       </button>`;
     });
@@ -771,6 +808,7 @@ function renderWatchlist(items) {
     const badge = (isIndices || isFx) && i.board
       ? `<span class="bb-watch-badge bb-watch-badge--${i.board}">${(i.board_title || i.board).slice(0, 4)}</span>` : '';
     return `<button type="button" class="bb-watch-row ${rowCls} ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}" data-board="${escHtml(i.board)}">
+      ${logoHtml(i.symbol)}
       <span class="bb-watch-sym">${badge}${escHtml(i.symbol)}</span>
       <span class="bb-watch-name">${escHtml((i.name || '').slice(0, 16))}</span>
       <span class="bb-watch-right">${price ? `<span class="bb-watch-price">${price}</span>` : ''}<span class="bb-watch-chg ${pct >= 0 ? 'up' : 'down'}">${bbPct(pct)}</span></span>
@@ -918,9 +956,9 @@ function renderIndicesStrip() {
   const items = picks.map(s => (BB.indicesCatalog || []).find(i => i.symbol === s)).filter(Boolean);
   el.innerHTML = items.map(i => {
     const up = (i.change_pct ?? 0) >= 0;
-    return `<button type="button" class="bb-idx-card ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${i.symbol}">
-      <span class="bb-idx-card-sym">${i.symbol}</span>
-      <span class="bb-idx-card-name">${i.name}</span>
+    return `<button type="button" class="bb-idx-card ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}">
+      <span class="bb-idx-card-sym">${escHtml(i.symbol)}</span>
+      <span class="bb-idx-card-name">${escHtml(i.name)}</span>
       <span class="bb-idx-card-price">${formatQuotePrice(i.price, i.kind)}</span>
       <span class="bb-idx-card-chg ${up ? 'up' : 'down'}">${bbPct(i.change_pct)}</span>
     </button>`;
@@ -943,9 +981,9 @@ function renderFxStrip() {
   const items = picks.map(s => fxCatalogList().find(i => i.symbol === s)).filter(Boolean);
   el.innerHTML = items.map(i => {
     const up = (i.change_pct ?? 0) >= 0;
-    return `<button type="button" class="bb-fx-card ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${i.symbol}">
-      <span class="bb-fx-card-sym">${i.symbol}</span>
-      <span class="bb-fx-card-name">${i.name}</span>
+    return `<button type="button" class="bb-fx-card ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}">
+      <span class="bb-fx-card-sym">${escHtml(i.symbol)}</span>
+      <span class="bb-fx-card-name">${escHtml(i.name)}</span>
       <span class="bb-fx-card-price">${formatQuotePrice(i.price, i.kind)}</span>
       <span class="bb-fx-card-chg ${up ? 'up' : 'down'}">${bbPct(i.change_pct)}</span>
     </button>`;
@@ -1095,13 +1133,15 @@ function setupKeyboard() {
       const btn = document.querySelector(`.bb-period[data-key="${e.key}"]`);
       if (btn) loadSymbol(BB.symbol, btn.dataset.period);
     }
-    if (e.key === 'ArrowLeft') panChart(-1);
-    if (e.key === 'ArrowRight') panChart(1);
-    if (e.key === 'Home') goChartStart();
-    if (e.key === 'End') goChartEnd();
-    if (e.key === '+' || e.key === '=') zoomChart(0.75);
-    if (e.key === '-') zoomChart(1.25);
-    if (e.key === 'f' || e.key === 'F') fitChartView();
+    if (BB.workspace !== 'portfolio') {
+      if (e.key === 'ArrowLeft') panChart(-1);
+      if (e.key === 'ArrowRight') panChart(1);
+      if (e.key === 'Home') goChartStart();
+      if (e.key === 'End') goChartEnd();
+      if (e.key === '+' || e.key === '=') zoomChart(0.75);
+      if (e.key === '-') zoomChart(1.25);
+      if (e.key === 'f' || e.key === 'F') fitChartView();
+    }
     if ((e.key === 'c' || e.key === 'C') && e.shiftKey) toggleCompare(true);
     else if (e.key === 'c' || e.key === 'C') toggleCompare(false);
     if (e.key === 'm' || e.key === 'M') toggleMA();
@@ -1136,7 +1176,7 @@ function toggleCompare(multi = false) {
 function toggleMA() {
   BB.showMA = !BB.showMA;
   document.getElementById('bbToggleMA')?.classList.toggle('active', BB.showMA);
-  loadSymbol(BB.symbol);
+  if (BB.lastChartData) renderCharts(BB.lastChartData);
 }
 
 function flashEl(el, dir) {
@@ -1198,16 +1238,12 @@ async function refreshTicker() {
   } catch (_) {}
 }
 
-async function loadBolsaTicker() {
-  return refreshTicker();
-}
-
 function tickHtml(q) {
   const pct = q.change_pct ?? 0;
   const up = pct >= 0;
   const priceStr = formatQuotePrice(q.price, q.kind);
-  return `<div class="bb-tick" data-symbol="${q.symbol}">
-    <span class="bb-tick-sym">${q.symbol}</span>
+  return `<div class="bb-tick" data-symbol="${escHtml(q.symbol)}">
+    <span class="bb-tick-sym">${escHtml(q.symbol)}</span>
     <span class="bb-tick-price">${priceStr}</span>
     <span class="bb-tick-chg ${up ? 'up' : 'down'}">${bbPct(pct)}</span>
   </div>`;
@@ -1222,6 +1258,25 @@ async function loadDefaultCatalog() {
     BB.catalogLoaded = true;
     if (!isQuoteWorkspace()) renderWatchlist();
   } catch (_) {}
+}
+
+function updateWatchlistPrices(quotes) {
+  if (!quotes) return;
+  document.querySelectorAll('.bb-watch-row[data-symbol]').forEach(row => {
+    const sym = row.dataset.symbol;
+    const q = quotes[sym];
+    if (!q || q.price == null) return;
+    const priceEl = row.querySelector('.bb-watch-price');
+    if (!priceEl) return;
+    const chgEl = row.querySelector('.bb-watch-chg');
+    const kind = q.kind || boardMeta(sym)?.kind;
+    priceEl.textContent = formatQuotePrice(q.price, kind);
+    if (chgEl) {
+      const pct = q.change_pct ?? 0;
+      chgEl.textContent = bbPct(pct);
+      chgEl.className = 'bb-watch-chg ' + (pct >= 0 ? 'up' : 'down');
+    }
+  });
 }
 
 let liveRefreshPromise = null;
@@ -1301,7 +1356,7 @@ async function refreshLiveInner() {
       }
     }
 
-    renderWatchlist();
+    updateWatchlistPrices(live.quotes || {});
     renderIndicesStrip();
     renderFxStrip();
     updatePortfolio(port);
@@ -1335,9 +1390,9 @@ function updatePortfolio(port) {
   }
   const prevPrices = BB.lastPortPrices || {};
   tbody.innerHTML = port.holdings.map(h => `
-    <tr data-symbol="${h.symbol}">
-      <td>${h.symbol}</td>
-      <td>${(h.name || '').slice(0,24)}</td>
+    <tr data-symbol="${escHtml(h.symbol)}">
+      <td>${escHtml(h.symbol)}</td>
+      <td>${escHtml((h.name || '').slice(0, 24))}</td>
       <td class="num">${h.shares}</td>
       <td class="num">${bbFmt(h.avg_cost)}</td>
       <td class="num">${bbFmt(h.market_price)}</td>
@@ -1362,8 +1417,8 @@ function updateFx(items) {
   const el = document.getElementById('bbFx');
   if (!el || !items?.length) return;
   el.innerHTML = items.map(fx => `
-    <div class="bb-fx-item" data-fx="${fx.id}">
-      <span class="bb-fx-label" title="${fx.note || ''}">${fx.label}${fx.note ? ` · ${fx.note}` : ''}</span>
+    <div class="bb-fx-item" data-fx="${escHtml(fx.id)}">
+      <span class="bb-fx-label" title="${escHtml(fx.note || '')}">${escHtml(fx.label)}${fx.note ? ` · ${escHtml(fx.note)}` : ''}</span>
       <span class="bb-fx-val">${fx.unit === '%' ? (fx.price != null ? fx.price.toFixed(2) + '%' : '—') : (fx.price != null ? Number(fx.price).toFixed(4) : '—')}</span>
       ${fx.unit !== '%' ? `<span class="bb-fx-chg ${fx.change_pct >= 0 ? 'up' : 'down'}">${bbPct(fx.change_pct)}</span>` : ''}
     </div>`).join('');
@@ -1387,7 +1442,7 @@ function initBloombergTerminal(config) {
 
   renderWatchlist([]);
   loadDefaultCatalog();
-  loadBolsaTicker();
+  refreshTicker();
   setupCommandBar();
   setupKeyboard();
   setupWorkspaceTabs();
@@ -1414,7 +1469,9 @@ function initBloombergTerminal(config) {
       });
     });
   });
+  let watchSearchSeq = 0;
   document.getElementById('bbWatchSearch')?.addEventListener('input', async (e) => {
+    const seq = ++watchSearchSeq;
     if (isQuoteWorkspace()) {
       renderWatchlist();
       return;
@@ -1422,7 +1479,10 @@ function initBloombergTerminal(config) {
     const q = e.target.value.trim();
     if (q.length >= 2) {
       const items = await searchCatalog(q);
-      if (!isQuoteWorkspace()) renderWatchlist(items);
+      if (seq !== watchSearchSeq) return;
+      const current = (document.getElementById('bbWatchSearch')?.value || '').trim();
+      if (current !== q || isQuoteWorkspace()) return;
+      renderWatchlist(items);
     } else {
       renderWatchlist(BB.catalog);
     }
@@ -1435,17 +1495,17 @@ function initBloombergTerminal(config) {
   document.getElementById('bbToggleRSI')?.addEventListener('click', () => {
     BB.showRSI = !BB.showRSI;
     document.getElementById('bbToggleRSI')?.classList.toggle('active', BB.showRSI);
-    loadSymbol(BB.symbol);
+    if (BB.lastChartData) renderCharts(BB.lastChartData);
   });
   document.getElementById('bbToggleBB')?.addEventListener('click', () => {
     BB.showBB = !BB.showBB;
     document.getElementById('bbToggleBB')?.classList.toggle('active', BB.showBB);
-    loadSymbol(BB.symbol);
+    if (BB.lastChartData) renderCharts(BB.lastChartData);
   });
   document.getElementById('bbToggleLog')?.addEventListener('click', () => {
     BB.logScale = !BB.logScale;
     document.getElementById('bbToggleLog')?.classList.toggle('active', BB.logScale);
-    loadSymbol(BB.symbol);
+    if (BB.lastChartData) renderCharts(BB.lastChartData);
   });
   document.getElementById('bbToggleDiv')?.classList.add('active');
   document.getElementById('bbToggleDiv')?.addEventListener('click', () => {

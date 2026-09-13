@@ -192,6 +192,7 @@ FX_SECTIONS: list[dict] = [
 ]
 
 _indices_cache: dict[str, object] = {"at": 0.0, "payload": {}}
+_board_cache: dict[str, object] = {"at": 0.0, "payload": {}}
 _fx_cache: dict[str, object] = {"at": 0.0, "payload": {}}
 INDICES_CACHE_SEC = 45
 
@@ -293,6 +294,10 @@ def _yahoo_quotes_with_change(symbols: list[str]) -> dict[str, dict]:
 
 def get_board_quotes() -> dict:
     """Return BMV / BIVA / SIC quote boards for the ticker banner."""
+    cached_at = float(_board_cache.get("at") or 0)
+    if _board_cache.get("payload") and time.time() - cached_at < INDICES_CACHE_SEC:
+        return _board_cache["payload"]  # type: ignore[return-value]
+
     now = datetime.now().isoformat(timespec="seconds")
     symbol_map: dict[str, tuple[dict, dict]] = {}
     for section in BOARD_SECTIONS:
@@ -332,12 +337,15 @@ def get_board_quotes() -> dict:
                 "quotes": rows,
             })
 
-    return {
+    payload = {
         "sections": sections_out,
         "quotes": flat,
         "fetched_at": now,
         "count": len(flat),
     }
+    _board_cache["at"] = time.time()
+    _board_cache["payload"] = payload
+    return payload
 
 
 def get_indices_quotes() -> dict:

@@ -21,7 +21,7 @@
     <div class="alert alert-good" style="margin-bottom:1rem">Datos reimportados correctamente.</div>
     {% endif %}
     {% if request.query_params.get('error') %}
-    <div class="alert alert-bad" style="margin-bottom:1rem">Debes escribir REIMPORTAR para confirmar.</div>
+    <div class="alert alert-bad" style="margin-bottom:1rem">{{ request.query_params.get('msg') or 'Debes escribir REIMPORTAR para confirmar.' }}</div>
     {% endif %}
     <p style="font-size:.88rem;color:var(--bad);margin-bottom:1rem">
       ⚠️ Esto <strong>borra</strong> tarjetas, categorías, patrimonio y gastos fijos, y los vuelve a cargar desde <code>Tarjetas.xlsx</code>.

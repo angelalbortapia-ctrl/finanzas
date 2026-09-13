@@ -294,7 +294,7 @@ def _refresh_holdings(conn, force: bool = False) -> dict:
         return {"updated": 0, "message": "Sin posiciones", "source": None}
 
     tickers = [h["ticker"] for h in holdings]
-    quotes = fetch_quotes(tickers, force=force)
+    quotes = _fetch_quotes(conn, tickers, force=force)
 
     now = _now()
     updated = 0

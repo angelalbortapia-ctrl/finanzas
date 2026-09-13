@@ -7,8 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from app.bmv_board import get_board_quotes
-from app.catalog import get_symbol_meta, list_catalog, load_catalog, search_catalog
+from app.catalog import get_symbol_meta, load_catalog
 
 MX_TZ = ZoneInfo("America/Mexico_City")
 

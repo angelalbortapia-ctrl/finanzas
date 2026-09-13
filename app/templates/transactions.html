@@ -12,7 +12,9 @@
 {% if request.query_params.get('deleted') %}
 <div class="hint reveal">✓ Movimiento eliminado. El saldo de la tarjeta se revirtió.</div>
 {% endif %}
-{% if request.query_params.get('error') %}
+{% if request.query_params.get('error') == 'validation' %}
+<div class="hint reveal" style="background:var(--bad-soft);color:var(--bad)">{{ request.query_params.get('msg') or 'Datos inválidos.' }}</div>
+{% elif request.query_params.get('error') %}
 <div class="hint reveal" style="background:var(--bad-soft);color:var(--bad)">No se encontró el movimiento.</div>
 {% endif %}
 
