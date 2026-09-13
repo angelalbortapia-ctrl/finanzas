@@ -26,7 +26,7 @@ const homeTickPrices = {};
 function homeTickHtml(q) {
   const pct = q.change_pct ?? 0;
   const up = pct >= 0;
-  return `<a href="/inversiones?symbol=${encodeURIComponent(q.symbol)}" class="bb-tick" data-symbol="${escHtml(q.symbol)}">
+  return `<a href="/emisora/${encodeURIComponent(q.symbol)}" class="bb-tick" data-symbol="${escHtml(q.symbol)}">
     <span class="bb-tick-sym">${escHtml(q.symbol)}</span>
     <span class="bb-tick-price">${fmtPrice(q.price)}</span>
     <span class="bb-tick-chg ${up ? 'up' : 'down'}">${bbPct(pct)}</span>

@@ -25,6 +25,9 @@ from app.logos import LOGO_OVERRIDES, enqueue_logo_resolve, get_logo_fast, get_s
 from app.market import get_price_meta
 from app.terminal import (
     _compute_indicators,
+    _fallback_chart_points,
+    get_chart_data,
+    get_financials_detail,
     get_economic_calendar,
     get_fx_panel,
     get_live_quotes,
@@ -188,6 +191,76 @@ class SmokeTests(unittest.TestCase):
         data = get_investments()
         self.assertIn("terminal", data)
         self.assertIn("insights", data)
+
+    def test_chart_fallback_when_yahoo_fails(self):
+        from unittest.mock import patch
+
+        fake = [{"t": "2026-01-01", "o": 100.0, "h": 100.0, "l": 100.0, "c": 100.0}]
+        with patch("app.terminal._fetch_yahoo_history", side_effect=RuntimeError("yahoo down")), patch(
+            "app.terminal._fallback_chart_points", return_value=fake,
+        ):
+            data = get_chart_data("IPC", "6mo")
+        self.assertEqual(len(data.get("points") or []), 1)
+        self.assertTrue(data.get("stale"))
+
+    def test_fallback_chart_points_from_cache(self):
+        from app.catalog import get_symbol_meta
+
+        conn = get_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO price_cache (ticker, price, source, fetched_at) VALUES (?, ?, ?, ?)",
+            ("BMV:GFNORTEO", 199.12, "test", "2026-09-11T12:00:00"),
+        )
+        conn.commit()
+        conn.close()
+        meta = get_symbol_meta("GFNORTEO")
+        pts = _fallback_chart_points("GFNORTEO", meta)
+        self.assertGreaterEqual(len(pts), 2)
+
+    def test_is_known_symbol(self):
+        from app.catalog import is_known_symbol
+
+        self.assertTrue(is_known_symbol("GFNORTEO"))
+        self.assertTrue(is_known_symbol("IPC"))
+        self.assertFalse(is_known_symbol("ZZZZNOTREAL"))
+
+    def test_emisora_page_route(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        client = TestClient(app)
+        ok = client.get("/emisora/GFNORTEO")
+        self.assertEqual(ok.status_code, 200)
+        self.assertIn("GFNORTEO", ok.text)
+        bad = client.get("/emisora/ZZZZNOTREAL")
+        self.assertEqual(bad.status_code, 404)
+
+    def test_financials_not_applicable_for_index(self):
+        data = get_financials_detail("IPC")
+        self.assertFalse(data.get("applicable"))
+
+    def test_financials_statement_shape(self):
+        from unittest.mock import MagicMock, patch
+
+        import pandas as pd
+
+        df = pd.DataFrame(
+            {"2024": [1000.0, 120.0], "2023": [900.0, 100.0]},
+            index=["Total Revenue", "Net Income"],
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.financials = df
+        mock_ticker.balance_sheet = pd.DataFrame()
+        mock_ticker.cashflow = pd.DataFrame()
+        mock_ticker.quarterly_financials = pd.DataFrame()
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            data = get_financials_detail("GFNORTEO")
+        self.assertTrue(data.get("applicable"))
+        income = data.get("annual", {}).get("income")
+        self.assertIsNotNone(income)
+        self.assertEqual(income["periods"], ["2024", "2023"])
+        self.assertGreaterEqual(len(income["rows"]), 1)
 
     def test_rsi_alignment(self):
         points = [{"c": 100 + i + (i % 3) * 0.5} for i in range(30)]

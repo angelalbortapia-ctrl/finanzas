@@ -123,6 +123,23 @@ function bbPct(n) {
   return (n >= 0 ? '+' : '') + Number(n).toFixed(2) + '%';
 }
 
+function bbFmtLarge(n, currency) {
+  if (n == null || n === '' || isNaN(n)) return '—';
+  const v = Number(n);
+  const abs = Math.abs(v);
+  const cur = currency === 'USD' ? 'US$' : '$';
+  if (abs >= 1e12) return cur + (v / 1e12).toFixed(2) + 'T';
+  if (abs >= 1e9) return cur + (v / 1e9).toFixed(2) + 'B';
+  if (abs >= 1e6) return cur + (v / 1e6).toFixed(2) + 'M';
+  if (abs >= 1e4) return cur + (v / 1e3).toFixed(1) + 'K';
+  return bbFmt(v);
+}
+
+function bbFmtRatio(n, dec = 2) {
+  if (n == null || n === '' || isNaN(n)) return '—';
+  return Number(n).toFixed(dec);
+}
+
 function parseTime(t, period) {
   if (period === '1d' || period === '5d') {
     const d = new Date(t.replace(' ', 'T'));
@@ -409,21 +426,34 @@ function destroyCharts() {
 function renderCharts(data) {
   const chartEl = document.getElementById('bbChart');
   const volEl = document.getElementById('bbVolChart');
+  const statusEl = document.getElementById('bbChartStatus');
   if (!chartEl || !data?.points?.length) {
     setChartLoading(false);
     return;
   }
   if (typeof LightweightCharts === 'undefined') {
-    chartEl.innerHTML = '<p style="padding:1rem;color:var(--bb-muted)">Gráfica no disponible (sin conexión al CDN)</p>';
+    chartEl.innerHTML = '<p style="padding:1rem;color:var(--bb-muted)">Gráfica no disponible — recarga la página (Cmd+Shift+R)</p>';
     setChartLoading(false);
     return;
   }
 
+  const sparse = data.stale || data.points.length < 8;
+  const chartType = sparse ? 'line' : BB.chartType;
+
   destroyCharts();
   chartEl.innerHTML = '';
   const { w, h, volH } = measureChartSize();
+  if (w < 50 || h < 50) {
+    BB._chartSizeTry = (BB._chartSizeTry || 0) + 1;
+    if (BB._chartSizeTry < 60) {
+      requestAnimationFrame(() => renderCharts(data));
+      return;
+    }
+  }
+  BB._chartSizeTry = 0;
+
+  try {
   BB.chart = LightweightCharts.createChart(chartEl, chartOpts(h));
-  const statusEl = document.getElementById('bbChartStatus');
   if (statusEl) statusEl.textContent = '';
   setChartLoading(false);
   const candles = data.points.map(p => ({
@@ -432,10 +462,10 @@ function renderCharts(data) {
   }));
   const closes = candles.map(c => ({ time: c.time, value: c.close }));
 
-  if (BB.chartType === 'line') {
+  if (chartType === 'line') {
     BB.priceSeries = BB.chart.addLineSeries({ color: '#60a5fa', lineWidth: 2, title: 'Cierre' });
     BB.priceSeries.setData(closes);
-  } else if (BB.chartType === 'area') {
+  } else if (chartType === 'area') {
     BB.priceSeries = BB.chart.addAreaSeries({
       lineColor: '#60a5fa', topColor: 'rgba(96,165,250,0.35)', bottomColor: 'rgba(96,165,250,0.02)',
       lineWidth: 2, title: 'Cierre',
@@ -551,6 +581,14 @@ function renderCharts(data) {
     resizeAllCharts();
     requestAnimationFrame(resizeAllCharts);
   });
+  } catch (err) {
+    console.error('renderCharts', err);
+    chartEl.innerHTML = '';
+    if (statusEl) {
+      statusEl.textContent = 'Error al dibujar la gráfica — recarga con Cmd+Shift+R';
+    }
+    setChartLoading(false);
+  }
 }
 
 function updateSymbolHeader(quote, chartData) {
@@ -588,34 +626,57 @@ function updateSymbolHeader(quote, chartData) {
   const dName = document.getElementById('bbDetailName');
   const dPrice = document.getElementById('bbDetailPrice');
   const dChg = document.getElementById('bbDetailChg');
-  if (dName) dName.textContent = sym;
+  const dMeta = document.getElementById('bbDetailMeta');
+  const company = quote?.name || chartData?.name || meta?.name || '';
+  if (dName) dName.textContent = company || sym;
+  if (dMeta) {
+    const parts = [sym];
+    if (quote?.board_title) parts.push(quote.board_title);
+    if (quote?.fundamentals?.sector) parts.push(quote.fundamentals.sector);
+    dMeta.textContent = parts.join(' · ');
+  }
   if (dPrice) dPrice.textContent = formatQuotePrice(p, kind);
   if (dChg) {
     dChg.textContent = bbPct(pct);
     dChg.className = 'bb-detail-chg ' + (pct >= 0 ? 'up' : 'down');
   }
 
-  const set = (id, v, fmt = bbFmt) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = v != null ? (typeof fmt === 'function' ? fmt(v) : v) : '—';
-  };
   if (quote && !quote.error) {
+    const set = (id, v, fmt = bbFmt) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = v != null ? (typeof fmt === 'function' ? fmt(v) : v) : '—';
+    };
     set('stOpen', quote.open);
     set('stHigh', quote.high);
     set('stLow', quote.low);
-    set('stPrev', quote.prev_close);
     set('stVol', quote.volume, v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'K' : String(Math.round(v)));
     if (quote.week52_low != null && quote.week52_high != null)
       set('st52', quote.week52_low, () => bbFmt(quote.week52_low) + ' – ' + bbFmt(quote.week52_high));
     if (quote.dividend_yield != null)
       set('stDivYield', quote.dividend_yield, v => Number(v).toFixed(2) + '%');
-    else
-      set('stDivYield', null);
-    if (quote.ex_dividend_date)
-      set('stDivEx', quote.ex_dividend_date);
-    else
-      set('stDivEx', null);
+    else set('stDivYield', null);
+    updateAnalysisLink(sym, quote);
+  } else {
+    updateAnalysisLink(sym, null);
   }
+}
+
+function updateAnalysisLink(symbol, quote) {
+  const sym = (symbol || '').replace('BMV:', '').toUpperCase();
+  const url = `/emisora/${encodeURIComponent(sym)}`;
+  const cta = document.getElementById('bbAnalysisCta');
+  const link = document.getElementById('bbAnalysisLink');
+  const linkTop = document.getElementById('bbAnalysisLinkTop');
+  const naEl = document.getElementById('bbFinNA');
+  const applicable = quote && !quote.error && quote.fundamentals_applicable !== false;
+
+  if (link) link.href = url;
+  if (linkTop) {
+    linkTop.href = url;
+    linkTop.hidden = !applicable;
+  }
+  if (cta) cta.hidden = !applicable;
+  if (naEl) naEl.hidden = applicable || !quote || quote.error;
 }
 
 function isIndexSymbol(symbol) {
@@ -676,16 +737,25 @@ async function loadSymbol(symbol, period) {
     const chartRes = await fetch(`/api/terminal/chart?symbol=${encodeURIComponent(reqSym)}&period=${reqPeriod}${cmp}`);
     if (loadId !== BB._loadId || reqSym !== BB.symbol) return;
     if (!chartRes.ok) {
-      if (statusEl) statusEl.textContent = `Error ${chartRes.status} al cargar gráfica`;
+      const msg = chartRes.status === 401
+        ? 'Sesión expirada — recarga e inicia sesión'
+        : `Error ${chartRes.status} al cargar gráfica`;
+      if (statusEl) statusEl.textContent = msg;
       setChartLoading(false);
       return;
     }
     const chartData = await chartRes.json();
     if (chartData.error) {
-      if (statusEl) statusEl.textContent = chartData.error;
+      if (statusEl) {
+        statusEl.textContent = chartData.detail
+          ? `${chartData.error} (${chartData.detail})`
+          : chartData.error;
+      }
       setChartLoading(false);
     } else {
-      if (chartData.period_fallback && statusEl) {
+      if (chartData.stale && statusEl) {
+        statusEl.textContent = 'Datos limitados (Yahoo no respondió — mostrando caché local)';
+      } else if (chartData.period_fallback && statusEl) {
         statusEl.textContent = `Mostrando ${chartData.period} (solicitado: ${chartData.period_requested})`;
       } else if (statusEl) {
         statusEl.textContent = '';
@@ -836,6 +906,10 @@ function renderWatchlist(items) {
   el.querySelectorAll('.bb-watch-row').forEach(row => {
     row.classList.add('bb-enter');
     row.addEventListener('click', () => loadSymbol(row.dataset.symbol));
+    row.addEventListener('dblclick', () => {
+      const sym = row.dataset.symbol;
+      if (sym) window.location.href = `/emisora/${encodeURIComponent(sym)}`;
+    });
   });
   staggerChildren(el, '.bb-watch-row', 'bb-enter');
 }
@@ -1149,6 +1223,9 @@ function setupKeyboard() {
     if (e.key === 'i' || e.key === 'I') switchWorkspace('indices');
     if (e.key === 'x' || e.key === 'X') switchWorkspace('fx');
     if (e.key === 'p' || e.key === 'P') switchWorkspace('portfolio');
+    if ((e.key === 'a' || e.key === 'A') && BB.workspace === 'market' && BB.symbol) {
+      window.location.href = `/emisora/${encodeURIComponent(BB.symbol)}`;
+    }
     if (e.key === 'l' || e.key === 'L') document.getElementById('bbLayoutBtn')?.click();
   });
   document.getElementById('bbKbdClose')?.addEventListener('click', () => {
@@ -1422,6 +1499,10 @@ function updatePortfolio(port) {
     }
     if (price != null) prevPrices[sym] = price;
     row.addEventListener('click', () => loadSymbol(row.dataset.symbol));
+    row.addEventListener('dblclick', () => {
+      const sym = row.dataset.symbol;
+      if (sym) window.location.href = `/emisora/${encodeURIComponent(sym)}`;
+    });
   });
   BB.lastPortPrices = prevPrices;
 }
@@ -1534,6 +1615,10 @@ function initBloombergTerminal(config) {
   });
   document.getElementById('bbPortRows')?.querySelectorAll('tr').forEach(row => {
     row.addEventListener('click', () => loadSymbol(row.dataset.symbol));
+    row.addEventListener('dblclick', () => {
+      const sym = row.dataset.symbol;
+      if (sym) window.location.href = `/emisora/${encodeURIComponent(sym)}`;
+    });
   });
 
   document.getElementById('bbTerminal')?.classList.add('bb-ready');

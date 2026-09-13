@@ -451,6 +451,11 @@ body.bb-resizing-row { cursor: row-resize; }
 .bb-home .bb-panel-body-flush { padding: .5rem 0; }
 .bb-home .bb-panel-body-tight { padding: 0; }
 
+.bb-home-head-links {
+  display: flex;
+  gap: .35rem;
+  flex-shrink: 0;
+}
 .bb-home-link {
   font-family: var(--bb-mono);
   font-size: .62rem;

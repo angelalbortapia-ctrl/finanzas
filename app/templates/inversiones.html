@@ -3,7 +3,7 @@
 {% block page_title %}Terminal de mercados{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="/static/terminal.css?v={{ static_v.terminal_css }}">
-<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="/static/lightweight-charts.js?v={{ static_v.lightweight_charts_js }}"></script>
 {% endblock %}
 {% block content %}
 
@@ -200,11 +200,15 @@
         </section>
         <div class="bb-resize-handle bb-resize-row" id="bbResizeNews" title="Alto noticias vs detalle"></div>
         <section class="bb-info-section bb-info-detail">
-          <div class="bb-pane-subhead"><span>Detalle · cotización</span></div>
+          <div class="bb-pane-subhead">
+            <span>Cotización</span>
+            <a href="/emisora/{{ term.default_symbol or 'IPC' }}" class="bb-analysis-link bb-analysis-link--inline" id="bbAnalysisLinkTop" hidden>Análisis →</a>
+          </div>
           <div class="bb-panel-body bb-detail-body">
             <div class="bb-detail-hero">
               <div class="bb-detail-name" id="bbDetailName">{{ term.default_symbol or 'IPC' }}</div>
               <div class="bb-detail-desc" id="bbSymDesc">—</div>
+              <div class="bb-detail-meta" id="bbDetailMeta"></div>
               <div class="bb-detail-price-row">
                 <span class="bb-detail-price" id="bbDetailPrice">—</span>
                 <span class="bb-detail-chg" id="bbDetailChg"></span>
@@ -214,12 +218,15 @@
               <div class="bb-stat"><div class="bb-stat-label">Apertura</div><div class="bb-stat-val" id="stOpen">—</div></div>
               <div class="bb-stat"><div class="bb-stat-label">Máximo</div><div class="bb-stat-val" id="stHigh">—</div></div>
               <div class="bb-stat"><div class="bb-stat-label">Mínimo</div><div class="bb-stat-val" id="stLow">—</div></div>
-              <div class="bb-stat"><div class="bb-stat-label">Cierre ant.</div><div class="bb-stat-val" id="stPrev">—</div></div>
               <div class="bb-stat"><div class="bb-stat-label">Volumen</div><div class="bb-stat-val" id="stVol">—</div></div>
               <div class="bb-stat"><div class="bb-stat-label">52 sem</div><div class="bb-stat-val" id="st52">—</div></div>
               <div class="bb-stat"><div class="bb-stat-label">Div. yield</div><div class="bb-stat-val" id="stDivYield">—</div></div>
-              <div class="bb-stat"><div class="bb-stat-label">Ex-div</div><div class="bb-stat-val" id="stDivEx">—</div></div>
             </div>
+            <div class="bb-analysis-cta" id="bbAnalysisCta" hidden>
+              <p class="bb-analysis-desc">Estados financieros, beneficios, balance y más — vista completa por emisora.</p>
+              <a href="/emisora/{{ term.default_symbol or 'IPC' }}" class="bb-analysis-link" id="bbAnalysisLink">Abrir análisis completo →</a>
+            </div>
+            <p class="bb-fin-na" id="bbFinNA" hidden>El análisis financiero no aplica a índices o divisas.</p>
           </div>
         </section>
         <details class="bb-info-calendar-wrap">

@@ -139,8 +139,25 @@ def load_catalog() -> dict[str, dict[str, Any]]:
     return catalog
 
 
+def _symbol_key(symbol: str) -> str:
+    return (symbol or "").strip().upper().replace("BMV:", "")
+
+
+def is_known_symbol(symbol: str) -> bool:
+    """True si el símbolo está en catálogo, índices o divisas (no fallback genérico)."""
+    key = _symbol_key(symbol)
+    if not key:
+        return False
+    if key in get_fx_lookup() or key in get_indices_lookup():
+        return True
+    cat = load_catalog()
+    if key in cat:
+        return True
+    return any(m.get("symbol") == key for m in cat.values())
+
+
 def get_symbol_meta(symbol: str) -> dict[str, Any] | None:
-    key = symbol.strip().upper().replace("BMV:", "")
+    key = _symbol_key(symbol)
     fx = get_fx_lookup().get(key)
     if fx:
         return {**fx, "sector": ""}

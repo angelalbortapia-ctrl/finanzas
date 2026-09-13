@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ symbol }} — Análisis — Finanzas{% endblock %}
+{% block page_title %}Análisis de emisora{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/terminal.css?v={{ static_v.terminal_css }}">
+<script src="/static/lightweight-charts.js?v={{ static_v.lightweight_charts_js }}"></script>
+{% endblock %}
+{% block content %}
+
+<div class="bb-emisora-page" id="bbEmisoraPage" data-symbol="{{ symbol }}">
+  <header class="bb-emisora-top">
+    <div class="bb-emisora-top-left">
+      <a href="/inversiones?symbol={{ symbol | urlencode }}" class="bb-emisora-back">← Terminal</a>
+      <div class="bb-emisora-search-wrap">
+        <input type="text" class="bb-emisora-search" id="bbEmisoraSearch" placeholder="Buscar emisora…" autocomplete="off">
+        <div class="bb-emisora-search-results" id="bbEmisoraSearchResults"></div>
+      </div>
+    </div>
+    <div class="bb-emisora-hero" id="bbEmisoraHero">
+      <span class="bb-watch-logo-wrap bb-emisora-logo-wrap">
+        <img class="bb-watch-logo" id="bbEmisoraLogo" src="/api/terminal/logo/{{ symbol }}" alt=""
+          onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
+        <span class="bb-watch-logo-fb" aria-hidden="true">{{ symbol[:2] }}</span>
+      </span>
+      <div class="bb-emisora-hero-text">
+        <div class="bb-emisora-symbol" id="bbEmisoraSymbol">{{ symbol }}</div>
+        <div class="bb-emisora-name" id="bbEmisoraName">{{ meta.name if meta else '—' }}</div>
+        <div class="bb-emisora-meta" id="bbEmisoraMeta">{{ meta.board_title if meta else '' }}</div>
+      </div>
+      <div class="bb-emisora-price-block">
+        <div class="bb-emisora-price" id="bbEmisoraPrice">—</div>
+        <div class="bb-emisora-chg" id="bbEmisoraChg"></div>
+      </div>
+      <a href="/inversiones?symbol={{ symbol | urlencode }}" class="bb-emisora-chart-link">Ver en terminal</a>
+    </div>
+  </header>
+
+  <div class="bb-emisora-grid">
+    <section class="bb-emisora-chart-panel bb-panel">
+      <div class="bb-pane-subhead"><span>Precio · 6 meses</span></div>
+      <div class="bb-emisora-chart-wrap">
+        <div id="bbEmisoraChartStatus" class="bb-chart-status"></div>
+        <div id="bbEmisoraChart"></div>
+      </div>
+    </section>
+
+    <aside class="bb-emisora-news-panel bb-panel">
+      <div class="bb-pane-subhead">
+        <span>Noticias</span>
+        <span class="bb-head-meta" id="bbEmisoraNewsTag">{{ symbol }}</span>
+      </div>
+      <div class="bb-panel-body" id="bbEmisoraNews"></div>
+    </aside>
+
+    <section class="bb-emisora-fin-panel bb-panel">
+      <div class="bb-pane-subhead"><span>Información financiera</span></div>
+      <div class="bb-fin-hub bb-fin-hub--page" id="bbFinHub">
+        <nav class="bb-fin-nav" id="bbFinNav" role="tablist" aria-label="Información financiera"></nav>
+        <div class="bb-fin-status" id="bbFinStatus">Cargando…</div>
+        <div class="bb-fin-content" id="bbFinContent"></div>
+      </div>
+      <p class="bb-fin-na" id="bbFinNA" hidden>Los detalles financieros no aplican a índices o divisas.</p>
+    </section>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/chart.umd.min.js?v={{ static_v.chart_umd_js }}"></script>
+<script src="/static/terminal-financials.js?v={{ static_v.terminal_financials_js }}"></script>
+<script src="/static/emisora.js?v={{ static_v.emisora_js }}"></script>
+<script>
+(function () {
+  function boot() {
+    if (typeof window.bootEmisoraPage !== 'function') {
+      const el = document.getElementById('bbFinStatus');
+      if (el) el.textContent = 'No se cargaron los scripts. Reinicia el servidor y recarga (Cmd+Shift+R).';
+      return;
+    }
+    window.bootEmisoraPage({
+      symbol: {{ symbol | tojson }},
+      tab: {{ (request.query_params.get('tab') or 'resumen') | tojson }},
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+</script>
+{% endblock %}

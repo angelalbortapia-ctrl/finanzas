@@ -103,14 +103,17 @@
             <h2>Portafolio GBM</h2>
             <p class="bb-panel-desc">{{ pm.source_label or 'snapshot' }} · {{ pm.fetched_age or 'sin actualizar' }}</p>
           </div>
-          <a href="/inversiones" class="bb-home-link">Terminal</a>
+          <div class="bb-home-head-links">
+            <a href="/inversiones" class="bb-home-link">Terminal</a>
+            <a href="/emisora/{{ data.holdings_top[0].symbol }}" class="bb-home-link">Análisis</a>
+          </div>
         </header>
         <div class="bb-panel-body-flush">
           <table class="bb-tbl">
             <thead><tr><th>Posición</th><th>Emisora</th><th class="num">Peso</th><th class="num">Valor</th><th class="num">P&amp;L</th></tr></thead>
             <tbody>
               {% for h in data.holdings_top %}
-              <tr class="clickable" data-href="/inversiones?symbol={{ h.symbol | urlencode }}">
+              <tr class="clickable" data-href="/emisora/{{ h.symbol }}" title="Abrir análisis · doble clic para terminal" data-href-alt="/inversiones?symbol={{ h.symbol | urlencode }}">
                 <td class="bb-port-ticker">
                   <span class="bb-watch-logo-wrap" data-symbol="{{ h.symbol }}">
                     <img class="bb-watch-logo" src="/api/terminal/logo/{{ h.symbol }}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">

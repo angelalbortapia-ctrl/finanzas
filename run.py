@@ -86,14 +86,15 @@ def prepare_port() -> int:
     kill_port(PORT)
     if wait_port_free(PORT):
         return PORT
-    print()
-    print("  No se pudo liberar el puerto", PORT)
-    print("  En otra terminal ejecuta:")
-    print(f"    lsof -ti:{PORT} | xargs kill -9")
-    print("  Luego vuelve a correr:")
-    print("    python3 run.py")
-    print()
-    raise SystemExit(1)
+    for alt in range(PORT + 1, PORT + 6):
+        if can_bind(alt):
+            print()
+            print(f"  ⚠️  Puerto {PORT} sigue ocupado (código viejo).")
+            print(f"  → Usa esta URL:  http://127.0.0.1:{alt}")
+            print(f"  → Para liberar {PORT}:  lsof -ti:{PORT} | xargs kill -9")
+            print()
+            return alt
+    raise SystemExit(f"No hay puertos libres entre {PORT} y {PORT + 5}.")
 
 
 def open_browser_when_ready(url: str):

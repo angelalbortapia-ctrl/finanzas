@@ -58,6 +58,7 @@ from app.terminal import (
     get_market_news,
     get_market_status,
     get_portfolio_live,
+    get_financials_detail,
     get_quote_detail,
 )
 from app.catalog import catalog_count, list_catalog, search_catalog
@@ -233,6 +234,11 @@ async def terminal_news_api(limit: int = 30, symbol: str = ""):
 @app.get("/api/terminal/quote")
 async def terminal_quote_api(symbol: str = "IPC"):
     return await run_blocking(get_quote_detail, symbol)
+
+
+@app.get("/api/terminal/financials")
+async def terminal_financials_api(symbol: str = "IPC"):
+    return await run_blocking(get_financials_detail, symbol)
 
 
 @app.get("/api/terminal/catalog")
@@ -634,6 +640,21 @@ async def investments_page(request: Request):
         request, "investments",
         data=data,
         google=get_google_status(),
+    ))
+
+
+@app.get("/emisora/{symbol}", response_class=HTMLResponse)
+async def emisora_page(request: Request, symbol: str):
+    from app.catalog import get_symbol_meta, is_known_symbol
+
+    sym = (symbol or "").strip().upper().replace("BMV:", "")
+    if not is_known_symbol(sym):
+        raise HTTPException(status_code=404, detail="Emisora no encontrada")
+    meta = get_symbol_meta(sym)
+    return templates.TemplateResponse("emisora.html", _ctx(
+        request, "emisora",
+        symbol=meta["symbol"],
+        meta=meta,
     ))
 
 

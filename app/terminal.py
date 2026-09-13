@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import threading
 import time
@@ -10,6 +11,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.catalog import get_symbol_meta, load_catalog
+
+logger = logging.getLogger(__name__)
 
 MX_TZ = ZoneInfo("America/Mexico_City")
 
@@ -31,9 +34,78 @@ PERIOD_MAP = {
 
 _news_cache: dict[str, Any] = {"at": 0.0, "items": [], "version": 2}
 _quote_cache: dict[str, Any] = {"at": 0.0, "data": {}}
+_chart_cache: dict[str, Any] = {"data": {}}
 _cache_lock = threading.Lock()
 NEWS_TTL_SEC = 900
 QUOTE_CACHE_SEC = 20
+CHART_CACHE_SEC = 300
+FINANCIALS_CACHE_SEC = 86400
+FINANCIALS_EMPTY_CACHE_SEC = 300
+_financials_cache: dict[str, Any] = {"data": {}}
+_CACHE_MAX_CHART = 200
+_CACHE_MAX_FINANCIALS = 80
+
+
+def _cache_put(
+    store: dict[str, Any],
+    key: str,
+    payload: dict[str, Any],
+    *,
+    ttl: int | None = None,
+    max_items: int = 200,
+) -> None:
+    store["data"][key] = {
+        "at": time.time(),
+        "payload": payload,
+        "ttl": ttl,
+    }
+    if len(store["data"]) > max_items:
+        oldest = sorted(
+            store["data"].items(),
+            key=lambda item: item[1].get("at", 0),
+        )
+        for stale_key, _ in oldest[: len(store["data"]) - max_items]:
+            store["data"].pop(stale_key, None)
+
+
+def _cache_get(store: dict[str, Any], key: str, default_ttl: int) -> dict[str, Any] | None:
+    cached = store["data"].get(key)
+    if not cached:
+        return None
+    ttl = cached.get("ttl") or default_ttl
+    if time.time() - cached.get("at", 0) >= ttl:
+        store["data"].pop(key, None)
+        return None
+    return cached
+
+STATEMENT_LABELS_ES: dict[str, str] = {
+    "Total Revenue": "Ingresos totales",
+    "Operating Revenue": "Ingresos operativos",
+    "Cost Of Revenue": "Costo de ventas",
+    "Gross Profit": "Utilidad bruta",
+    "Operating Expense": "Gastos operativos",
+    "Operating Income": "Utilidad operativa",
+    "EBITDA": "EBITDA",
+    "Net Income": "Utilidad neta",
+    "Basic EPS": "UTPA básica",
+    "Diluted EPS": "UTPA diluida",
+    "Total Assets": "Activos totales",
+    "Total Liabilities Net Minority Interest": "Pasivos totales",
+    "Stockholders Equity": "Capital contable",
+    "Total Debt": "Deuda total",
+    "Net Debt": "Deuda neta",
+    "Cash And Cash Equivalents": "Efectivo y equivalentes",
+    "Operating Cash Flow": "Flujo operativo",
+    "Free Cash Flow": "Flujo de caja libre",
+    "Capital Expenditure": "Inversión en capex",
+    "Repurchase Of Capital Stock": "Recompra de acciones",
+}
+
+PRIORITY_STATEMENT_ROWS = (
+    "Total Revenue", "Operating Revenue", "Gross Profit", "Operating Income",
+    "EBITDA", "Net Income", "Basic EPS", "Total Assets",
+    "Stockholders Equity", "Total Debt", "Operating Cash Flow", "Free Cash Flow",
+)
 
 SPANISH_NEWS_FEEDS: list[tuple[str, str]] = [
     ("BMV", "https://news.google.com/rss/search?q=bolsa+mexicana+BMV+IPC&hl=es-MX&gl=MX&ceid=MX:es-419"),
@@ -169,6 +241,220 @@ def _parse_chart_ts(ts: str) -> datetime | None:
         return None
 
 
+def _hist_column(row: Any, *names: str) -> float | None:
+    for name in names:
+        if name in row.index:
+            val = _safe_float(row[name])
+            if val is not None:
+                return val
+    return None
+
+
+def _normalize_hist_df(hist: Any) -> Any | None:
+    if hist is None or getattr(hist, "empty", True):
+        return None
+    try:
+        import pandas as pd
+
+        if isinstance(hist.columns, pd.MultiIndex):
+            hist = hist.copy()
+            hist.columns = [
+                str(col[0]) if isinstance(col, tuple) else str(col)
+                for col in hist.columns
+            ]
+    except Exception:
+        pass
+    return hist
+
+
+def _fetch_yahoo_history(yahoo: str, yf_period: str, interval: str) -> Any | None:
+    import yfinance as yf
+
+    last_err: Exception | None = None
+    for attempt in range(2):
+        try:
+            hist = yf.Ticker(yahoo).history(
+                period=yf_period, interval=interval, auto_adjust=True,
+            )
+            hist = _normalize_hist_df(hist)
+            if hist is not None and not hist.empty:
+                return hist
+        except Exception as exc:
+            last_err = exc
+        try:
+            hist = yf.download(
+                yahoo,
+                period=yf_period,
+                interval=interval,
+                auto_adjust=True,
+                progress=False,
+                threads=False,
+            )
+            hist = _normalize_hist_df(hist)
+            if hist is not None and not hist.empty:
+                return hist
+        except Exception as exc:
+            last_err = exc
+        if attempt == 0:
+            time.sleep(0.4)
+    if last_err:
+        raise last_err
+    return None
+
+
+def _hist_to_points(hist: Any, interval: str) -> tuple[list[dict], list[dict]]:
+    points: list[dict] = []
+    volumes: list[dict] = []
+    for idx, row in hist.iterrows():
+        if interval in ("5m", "30m", "1h"):
+            ts = idx.to_pydatetime().strftime("%Y-%m-%d %H:%M")
+        else:
+            ts = idx.to_pydatetime().strftime("%Y-%m-%d")
+        o = _hist_column(row, "Open", "open") or 0
+        h = _hist_column(row, "High", "high") or 0
+        l = _hist_column(row, "Low", "low") or 0
+        c = _hist_column(row, "Close", "close") or 0
+        if c != c:
+            continue
+        points.append({"t": ts, "o": o, "h": h, "l": l, "c": c})
+        vol = _hist_column(row, "Volume", "volume") or 0
+        volumes.append({"t": ts, "v": vol if vol == vol else 0})
+    return points, volumes
+
+
+def _stretch_flat_price(price: float, days: int = 45) -> list[dict]:
+    """Último recurso: línea plana para que la gráfica no quede vacía."""
+    today = datetime.now(MX_TZ).date()
+    return [
+        {
+            "t": (today - timedelta(days=offset)).strftime("%Y-%m-%d"),
+            "o": price,
+            "h": price,
+            "l": price,
+            "c": price,
+        }
+        for offset in range(days, -1, -1)
+    ]
+
+
+def _fallback_chart_points(symbol: str, meta: dict) -> list[dict]:
+    from app.database import get_db
+    from app.market import get_price_history
+
+    sym = (meta.get("symbol") or symbol or "").replace("BMV:", "").upper()
+    ticker = meta.get("ticker") or sym
+    yahoo = meta.get("yahoo")
+    rows = get_price_history(ticker, limit=180)
+    points: list[dict] = []
+    for row in rows:
+        price = _safe_float(row.get("price"))
+        if price is None:
+            continue
+        raw_ts = str(row.get("recorded_at") or "")
+        ts = raw_ts[:10]
+        if len(ts) < 10:
+            continue
+        points.append({"t": ts, "o": price, "h": price, "l": price, "c": price})
+
+    if len(points) >= 2:
+        return points
+
+    with _cache_lock:
+        for key in (sym, yahoo):
+            q = _quote_cache.get("data", {}).get(key or "")
+            if q and q.get("price"):
+                return _stretch_flat_price(float(q["price"]))
+
+    conn = get_db()
+    try:
+        last_price = None
+        for key in dict.fromkeys(filter(None, [ticker, f"BMV:{sym}", sym, yahoo, f"^{sym}"])):
+            cached = conn.execute(
+                "SELECT price FROM price_cache WHERE ticker = ? LIMIT 1",
+                (key,),
+            ).fetchone()
+            if cached and cached["price"]:
+                last_price = float(cached["price"])
+                break
+        if last_price is None:
+            holding = conn.execute(
+                """SELECT market_price FROM investment_holdings
+                   WHERE ticker IN (?, ?, ?) LIMIT 1""",
+                (ticker, f"BMV:{sym}", sym),
+            ).fetchone()
+            if holding and holding["market_price"]:
+                last_price = float(holding["market_price"])
+        if last_price is None:
+            index_row = conn.execute(
+                "SELECT quote FROM market_indices WHERE ticker = ? LIMIT 1",
+                (sym,),
+            ).fetchone()
+            if index_row and index_row["quote"]:
+                last_price = float(index_row["quote"])
+        if last_price is None and sym == "IPC":
+            hist_row = conn.execute(
+                """SELECT price FROM price_history
+                   WHERE ticker IN ('^MXX', 'IPC', 'BMV:IPC') ORDER BY recorded_at DESC LIMIT 1"""
+            ).fetchone()
+            if hist_row and hist_row["price"]:
+                last_price = float(hist_row["price"])
+    finally:
+        conn.close()
+
+    if last_price is not None:
+        today = datetime.now(MX_TZ).strftime("%Y-%m-%d")
+        if points:
+            last_point = points[-1]
+            if last_point.get("t") == today:
+                last_point.update({
+                    "o": last_price,
+                    "h": last_price,
+                    "l": last_price,
+                    "c": last_price,
+                })
+            else:
+                points.append({
+                    "t": today,
+                    "o": last_price,
+                    "h": last_price,
+                    "l": last_price,
+                    "c": last_price,
+                })
+            return points
+        return _stretch_flat_price(last_price)
+
+    return points
+
+
+def _persist_chart_points(meta: dict, points: list[dict], source: str = "yahoo_chart") -> None:
+    """Guarda cierres en price_history para respaldo offline."""
+    if len(points) < 2:
+        return
+    from app.database import get_db
+
+    sym = (meta.get("symbol") or "").replace("BMV:", "").upper()
+    keys = list(dict.fromkeys(filter(None, [sym, f"BMV:{sym}", meta.get("yahoo")])))
+    conn = get_db()
+    try:
+        for p in points[-120:]:
+            price = _safe_float(p.get("c"))
+            if price is None:
+                continue
+            raw_t = str(p.get("t") or "")
+            recorded = raw_t if " " in raw_t else f"{raw_t[:10]}T16:00:00"
+            if len(recorded) < 10:
+                continue
+            for key in keys:
+                conn.execute(
+                    """INSERT OR IGNORE INTO price_history (ticker, price, source, recorded_at)
+                       VALUES (?, ?, ?, ?)""",
+                    (key, price, source, recorded),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _fetch_chart_dividends(yahoo: str, period: str, points: list[dict]) -> tuple[list[dict], dict | None]:
     if not points or period in ("1d", "5d"):
         return [], None
@@ -231,37 +517,57 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
     if not meta:
         return {"error": "Símbolo no encontrado", "symbol": symbol}
 
+    cache_key = f"{meta['symbol']}|{period}|{compare}"
+    now = time.time()
+    with _cache_lock:
+        cached = _cache_get(_chart_cache, cache_key, CHART_CACHE_SEC)
+        if cached:
+            return dict(cached["payload"])
+
     yahoo = meta["yahoo"]
     yf_period, interval = PERIOD_MAP.get(period, ("6mo", "1d"))
     import yfinance as yf
 
+    data_source = "yahoo"
+    yahoo_error = ""
+    points: list[dict] = []
+    volumes: list[dict] = []
     try:
-        hist = yf.Ticker(yahoo).history(period=yf_period, interval=interval, auto_adjust=True)
+        hist = _fetch_yahoo_history(yahoo, yf_period, interval)
+        if hist is not None:
+            points, volumes = _hist_to_points(hist, interval)
     except Exception as exc:
-        return {"error": str(exc), "symbol": symbol}
+        yahoo_error = str(exc)
 
-    if hist is None or hist.empty:
-        return {"error": "Sin datos históricos", "symbol": symbol}
+    if not points:
+        with _cache_lock:
+            stale = _chart_cache["data"].get(cache_key)
+            stale_pts = (stale or {}).get("payload", {}).get("points") or []
+        if stale_pts:
+            payload = dict(stale["payload"])
+            payload["stale"] = True
+            payload["data_source"] = "cache"
+            payload["fetched_at"] = _now()
+            return payload
+        points = _fallback_chart_points(symbol, meta)
+        data_source = "cache" if points else "none"
 
-    points = []
-    volumes = []
-    for idx, row in hist.iterrows():
-        if interval in ("5m", "30m", "1h"):
-            ts = idx.to_pydatetime().strftime("%Y-%m-%d %H:%M")
-        else:
-            ts = idx.to_pydatetime().strftime("%Y-%m-%d")
-        o = _safe_float(row["Open"]) or 0
-        h = _safe_float(row["High"]) or 0
-        l = _safe_float(row["Low"]) or 0
-        c = _safe_float(row["Close"]) or 0
-        if c != c:
-            continue
-        points.append({"t": ts, "o": o, "h": h, "l": l, "c": c})
-        vol = float(row.get("Volume") or 0)
-        volumes.append({"t": ts, "v": vol if vol == vol else 0})
+    if not points:
+        detail = yahoo_error or "sin respuesta de Yahoo Finance"
+        return {
+            "error": "Sin datos históricos — revisa tu conexión e intenta de nuevo",
+            "symbol": symbol,
+            "detail": detail,
+        }
+
+    if data_source == "cache":
+        volumes = [{"t": p["t"], "v": 0} for p in points]
 
     indicators = _compute_indicators(points)
-    dividends, dividend_next = _fetch_chart_dividends(yahoo, period, points)
+    if data_source == "yahoo":
+        dividends, dividend_next = _fetch_chart_dividends(yahoo, period, points)
+    else:
+        dividends, dividend_next = [], None
     last = points[-1]["c"] if points else 0
     first = points[0]["c"] if points else 0
     chg = last - first
@@ -285,6 +591,8 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
         "change_abs": chg,
         "change_pct": chg_pct,
         "fetched_at": _now(),
+        "data_source": data_source,
+        "stale": data_source != "yahoo",
     }
 
     compare_symbols = [s.strip().upper().replace("BMV:", "") for s in compare.split(",") if s.strip()]
@@ -332,7 +640,349 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
         result["compares"] = compares
         result["compare"] = compares[0]
 
+    if data_source == "yahoo" and len(points) >= 2:
+        try:
+            _persist_chart_points(meta, points)
+        except Exception:
+            pass
+
+    with _cache_lock:
+        _cache_put(_chart_cache, cache_key, dict(result), max_items=_CACHE_MAX_CHART)
     return result
+
+
+def _info_pct(value: Any) -> float | None:
+    val = _safe_float(value)
+    if val is None:
+        return None
+    if abs(val) <= 1.5:
+        return round(val * 100, 2)
+    return round(val, 2)
+
+
+def _statement_label(label: str) -> str:
+    return STATEMENT_LABELS_ES.get(label, label.replace("_", " "))
+
+
+def _period_label(col: Any) -> str:
+    if hasattr(col, "year") and hasattr(col, "month"):
+        quarter = (int(col.month) - 1) // 3 + 1
+        return f"T{quarter} '{str(col.year)[-2:]}"
+    if hasattr(col, "year"):
+        return str(col.year)
+    return str(col)[:10]
+
+
+def _df_row_values(df: Any, keys: tuple[str, ...]) -> list[dict[str, Any]]:
+    if df is None or getattr(df, "empty", True):
+        return []
+    series = None
+    for key in keys:
+        if key in df.index:
+            series = df.loc[key]
+            break
+    if series is None:
+        return []
+    out: list[dict[str, Any]] = []
+    for col, raw in series.items():
+        val = _safe_float(raw)
+        if val is None:
+            continue
+        out.append({"period": _period_label(col), "value": round(val, 4)})
+    out.reverse()
+    return out
+
+
+def _income_trends(annual_df: Any, quarterly_df: Any) -> dict[str, Any]:
+    def pack(df: Any, annual: bool) -> dict[str, Any]:
+        revenue = _df_row_values(df, ("Total Revenue", "Operating Revenue"))
+        net_income = _df_row_values(df, ("Net Income",))
+        margin: list[dict[str, Any]] = []
+        rev_map = {item["period"]: item["value"] for item in revenue}
+        for item in net_income:
+            rev = rev_map.get(item["period"])
+            if rev and rev != 0:
+                margin.append({
+                    "period": item["period"],
+                    "value": round(item["value"] / rev * 100, 2),
+                })
+        return {
+            "periods": [p["period"] for p in revenue],
+            "revenue": revenue,
+            "net_income": net_income,
+            "margin_pct": margin,
+            "annual": annual,
+        }
+
+    return {
+        "annual": pack(annual_df, True),
+        "quarterly": pack(quarterly_df, False),
+    }
+
+
+def _earnings_history(ticker: Any, info: dict) -> dict[str, Any]:
+    quarterly: list[dict[str, Any]] = []
+    try:
+        dates = ticker.get_earnings_dates(limit=20)
+        if dates is not None and not dates.empty:
+            for idx, row in dates.sort_index().iterrows():
+                dt = idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx
+                label = _period_label(dt) if hasattr(dt, "month") else str(dt)[:10]
+                reported = _safe_float(row.get("Reported EPS"))
+                estimate = _safe_float(row.get("EPS Estimate"))
+                surprise = _safe_float(row.get("Surprise(%)"))
+                quarterly.append({
+                    "date": dt.strftime("%Y-%m-%d") if hasattr(dt, "strftime") else str(dt)[:10],
+                    "period": label,
+                    "reported_eps": reported,
+                    "estimate_eps": estimate,
+                    "surprise_pct": surprise,
+                })
+    except Exception:
+        quarterly = []
+
+    forward_eps = _safe_float(info.get("forwardEps"))
+    next_date = None
+    for key in ("earningsDate", "earningsTimestamp"):
+        raw = info.get(key)
+        if not raw:
+            continue
+        try:
+            if isinstance(raw, (list, tuple)) and raw:
+                raw = raw[0]
+            next_date = datetime.fromtimestamp(int(raw), MX_TZ).strftime("%Y-%m-%d")
+            break
+        except (TypeError, ValueError, OSError):
+            continue
+
+    return {
+        "quarterly": quarterly,
+        "next_report_date": next_date,
+        "forward_eps": forward_eps,
+        "trailing_eps": _safe_float(info.get("trailingEps")),
+    }
+
+
+def _dividend_history(ticker: Any, info: dict) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    try:
+        divs = ticker.dividends
+        if divs is not None and not divs.empty:
+            for idx, val in divs.tail(24).items():
+                amount = _safe_float(val)
+                if amount is None or amount <= 0:
+                    continue
+                dt = idx.to_pydatetime()
+                rows.append({
+                    "date": dt.strftime("%Y-%m-%d"),
+                    "amount": round(amount, 4),
+                })
+    except Exception:
+        rows = []
+    div_yield = _info_pct(info.get("dividendYield") or info.get("trailingAnnualDividendYield"))
+    div_rate = _safe_float(info.get("dividendRate") or info.get("trailingAnnualDividendRate"))
+    ex_div = None
+    if info.get("exDividendDate"):
+        try:
+            ex_div = datetime.fromtimestamp(int(info["exDividendDate"]), MX_TZ).strftime("%Y-%m-%d")
+        except (TypeError, ValueError, OSError):
+            ex_div = None
+    return {
+        "history": rows,
+        "yield_pct": div_yield,
+        "rate": div_rate,
+        "ex_date": ex_div,
+        "pays": bool(rows) or bool(div_rate),
+    }
+
+
+def _extended_statistics(info: dict, fundamentals: dict) -> list[dict[str, str]]:
+    pairs = [
+        ("Cap. bursátil", fundamentals.get("market_cap"), "large"),
+        ("Valor empresa", fundamentals.get("enterprise_value"), "large"),
+        ("P/E trailing", fundamentals.get("pe_trailing"), "ratio"),
+        ("P/E forward", fundamentals.get("pe_forward"), "ratio"),
+        ("P/B", fundamentals.get("price_to_book"), "ratio"),
+        ("UTPA", fundamentals.get("eps"), "ratio"),
+        ("Beta", fundamentals.get("beta"), "ratio"),
+        ("Margen beneficio", fundamentals.get("profit_margin"), "pct"),
+        ("ROE", fundamentals.get("roe"), "pct"),
+        ("Ingresos", fundamentals.get("revenue"), "large"),
+        ("EBITDA", fundamentals.get("ebitda"), "large"),
+        ("Efectivo", fundamentals.get("total_cash"), "large"),
+        ("Deuda total", fundamentals.get("total_debt"), "large"),
+        ("Valor en libros", fundamentals.get("book_value"), "ratio"),
+        ("Acciones en circ.", fundamentals.get("shares_outstanding"), "large"),
+        ("Crec. ingresos", _info_pct(info.get("revenueGrowth")), "pct"),
+        ("Crec. utilidades", _info_pct(info.get("earningsGrowth")), "pct"),
+        ("Deuda/Patrimonio", _safe_float(info.get("debtToEquity")), "ratio"),
+        ("Ratio corriente", _safe_float(info.get("currentRatio")), "ratio"),
+        ("Sector", fundamentals.get("sector") or info.get("sector"), "text"),
+        ("Industria", fundamentals.get("industry") or info.get("industry"), "text"),
+    ]
+    out: list[dict[str, str]] = []
+    for label, val, kind in pairs:
+        if val is None or val == "":
+            continue
+        if kind == "large":
+            display = _format_large_number(float(val))
+        elif kind == "pct":
+            display = f"{float(val):.2f}%"
+        elif kind == "ratio":
+            display = f"{float(val):.2f}"
+        else:
+            display = str(val)
+        out.append({"label": label, "value": display})
+    return out
+
+
+def _format_large_number(n: float) -> str:
+    abs_n = abs(n)
+    if abs_n >= 1e12:
+        return f"${n / 1e12:.2f}T"
+    if abs_n >= 1e9:
+        return f"${n / 1e9:.2f}B"
+    if abs_n >= 1e6:
+        return f"${n / 1e6:.2f}M"
+    if abs_n >= 1e4:
+        return f"${n / 1e3:.1f}K"
+    return f"${n:,.2f}"
+
+
+def _df_to_statement(df: Any, max_rows: int = 18) -> dict[str, Any] | None:
+    if df is None or getattr(df, "empty", True):
+        return None
+    periods: list[str] = []
+    for col in df.columns:
+        if hasattr(col, "year"):
+            periods.append(str(col.year))
+        else:
+            periods.append(str(col)[:10])
+    priority = {name: i for i, name in enumerate(PRIORITY_STATEMENT_ROWS)}
+    indexed = list(df.iterrows())
+    indexed.sort(key=lambda item: priority.get(str(item[0]), 999))
+    rows: list[dict[str, Any]] = []
+    for label, series in indexed[:max_rows]:
+        values: list[float | None] = []
+        for raw in series:
+            val = _safe_float(raw)
+            values.append(round(val, 2) if val is not None else None)
+        rows.append({
+            "label": _statement_label(str(label)),
+            "key": str(label),
+            "values": values,
+        })
+    if not rows:
+        return None
+    return {"periods": periods, "rows": rows}
+
+
+def get_financials_detail(symbol: str) -> dict[str, Any]:
+    meta = get_symbol_meta(symbol)
+    if not meta:
+        return {"error": "Símbolo no encontrado"}
+    if meta.get("kind") in ("index", "fx"):
+        return {
+            "symbol": meta["symbol"],
+            "name": meta["name"],
+            "applicable": False,
+            "message": "Los estados financieros no aplican a índices o divisas",
+        }
+
+    cache_key = meta["symbol"]
+    with _cache_lock:
+        cached = _cache_get(_financials_cache, cache_key, FINANCIALS_CACHE_SEC)
+        if cached:
+            return dict(cached["payload"])
+
+    import yfinance as yf
+
+    yahoo = meta["yahoo"]
+    try:
+        ticker = yf.Ticker(yahoo)
+        info = ticker.info or {}
+        income = _df_to_statement(ticker.financials)
+        balance = _df_to_statement(ticker.balance_sheet)
+        cashflow = _df_to_statement(ticker.cashflow)
+        q_income = _df_to_statement(ticker.quarterly_financials)
+        q_balance = _df_to_statement(ticker.quarterly_balance_sheet)
+        q_cashflow = _df_to_statement(ticker.quarterly_cashflow)
+    except Exception as exc:
+        logger.warning("financials fetch failed for %s: %s", yahoo, exc)
+        return {
+            "error": "No se pudieron obtener datos financieros",
+            "symbol": meta["symbol"],
+        }
+
+    fundamentals = _quote_fundamentals(meta, info)
+    annual = {"income": income, "balance": balance, "cashflow": cashflow}
+    quarterly = {
+        "income": q_income,
+        "balance": q_balance,
+        "cashflow": q_cashflow,
+    }
+    has_data = any(annual.values()) or any(quarterly.values())
+    currency = info.get("currency", "MXN")
+    result: dict[str, Any] = {
+        "symbol": meta["symbol"],
+        "name": meta["name"],
+        "yahoo": yahoo,
+        "applicable": True,
+        "currency": currency,
+        "annual": annual,
+        "quarterly": quarterly,
+        "income_trends": _income_trends(ticker.financials, ticker.quarterly_financials),
+        "earnings": _earnings_history(ticker, info),
+        "dividends": _dividend_history(ticker, info),
+        "statistics": _extended_statistics(info, fundamentals),
+        "fundamentals": fundamentals,
+        "fetched_at": _now(),
+    }
+    if not has_data and not result["earnings"].get("quarterly"):
+        result["message"] = "Estados financieros no disponibles para esta emisora en Yahoo Finance"
+
+    cache_ttl = (
+        FINANCIALS_CACHE_SEC
+        if has_data or result["earnings"].get("quarterly")
+        else FINANCIALS_EMPTY_CACHE_SEC
+    )
+    with _cache_lock:
+        _cache_put(
+            _financials_cache,
+            cache_key,
+            dict(result),
+            ttl=cache_ttl,
+            max_items=_CACHE_MAX_FINANCIALS,
+        )
+    return result
+
+
+def _quote_fundamentals(meta: dict, info: dict) -> dict[str, Any]:
+    sector = info.get("sector") or meta.get("sector")
+    industry = info.get("industry")
+    return {
+        "sector": sector,
+        "industry": industry,
+        "kind": meta.get("kind", "stock"),
+        "board": meta.get("board"),
+        "board_title": meta.get("board_title"),
+        "market_cap": _safe_float(info.get("marketCap")),
+        "enterprise_value": _safe_float(info.get("enterpriseValue")),
+        "pe_trailing": _safe_float(info.get("trailingPE")),
+        "pe_forward": _safe_float(info.get("forwardPE")),
+        "price_to_book": _safe_float(info.get("priceToBook")),
+        "eps": _safe_float(info.get("trailingEps")),
+        "beta": _safe_float(info.get("beta")),
+        "profit_margin": _info_pct(info.get("profitMargins")),
+        "roe": _info_pct(info.get("returnOnEquity")),
+        "revenue": _safe_float(info.get("totalRevenue")),
+        "ebitda": _safe_float(info.get("ebitda")),
+        "total_cash": _safe_float(info.get("totalCash")),
+        "total_debt": _safe_float(info.get("totalDebt")),
+        "book_value": _safe_float(info.get("bookValue")),
+        "avg_volume": _safe_float(info.get("averageVolume")),
+        "shares_outstanding": _safe_float(info.get("sharesOutstanding")),
+    }
 
 
 def get_quote_detail(symbol: str) -> dict:
@@ -374,11 +1024,16 @@ def get_quote_detail(symbol: str) -> dict:
         except (TypeError, ValueError, OSError):
             ex_div = None
 
+    fundamentals = _quote_fundamentals(meta, info)
+    kind = meta.get("kind", "stock")
+
     return {
         "symbol": meta["symbol"],
         "name": meta["name"],
         "yahoo": yahoo,
         "board": meta.get("board", "bmv"),
+        "board_title": meta.get("board_title"),
+        "kind": kind,
         "price": price,
         "bid": _safe_float(info.get("bid")),
         "ask": _safe_float(info.get("ask")),
@@ -387,10 +1042,10 @@ def get_quote_detail(symbol: str) -> dict:
         "low": _safe_float(info.get("dayLow") or info.get("regularMarketDayLow")),
         "prev_close": prev,
         "volume": _safe_float(info.get("volume") or info.get("regularMarketVolume")),
-        "avg_volume": _safe_float(info.get("averageVolume")),
+        "avg_volume": fundamentals.get("avg_volume"),
         "week52_high": _safe_float(info.get("fiftyTwoWeekHigh")),
         "week52_low": _safe_float(info.get("fiftyTwoWeekLow")),
-        "market_cap": _safe_float(info.get("marketCap")),
+        "market_cap": fundamentals.get("market_cap"),
         "dividend_yield": div_yield if div_yield is not None else (
             (div_rate / price * 100) if div_rate and price else None
         ),
@@ -401,6 +1056,8 @@ def get_quote_detail(symbol: str) -> dict:
         "currency": info.get("currency", "MXN"),
         "fetched_at": _now(),
         "delayed": True,
+        "fundamentals_applicable": kind not in ("index", "fx"),
+        "fundamentals": fundamentals,
     }
 
 

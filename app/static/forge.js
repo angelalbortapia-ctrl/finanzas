@@ -280,6 +280,10 @@ function initPortfolioRowLinks() {
       const href = row.dataset.href;
       if (href) window.location.href = href;
     });
+    row.addEventListener('dblclick', () => {
+      const href = row.dataset.hrefAlt;
+      if (href) window.location.href = href;
+    });
   });
 }
 
