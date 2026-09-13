@@ -26,10 +26,12 @@ from app.market import get_price_meta
 from app.terminal import (
     _compute_indicators,
     _fallback_chart_points,
+    _income_trends,
     get_chart_data,
     get_financials_detail,
     get_economic_calendar,
     get_fx_panel,
+    get_holding_position,
     get_live_quotes,
     get_market_status,
     get_portfolio_live,
@@ -249,18 +251,63 @@ class SmokeTests(unittest.TestCase):
             index=["Total Revenue", "Net Income"],
         )
         mock_ticker = MagicMock()
+        mock_ticker.info = {"currency": "MXN", "trailingEps": 1.0}
         mock_ticker.financials = df
         mock_ticker.balance_sheet = pd.DataFrame()
         mock_ticker.cashflow = pd.DataFrame()
         mock_ticker.quarterly_financials = pd.DataFrame()
+        mock_ticker.quarterly_balance_sheet = pd.DataFrame()
+        mock_ticker.quarterly_cashflow = pd.DataFrame()
 
         with patch("yfinance.Ticker", return_value=mock_ticker):
-            data = get_financials_detail("GFNORTEO")
+            data = get_financials_detail("GFNORTEO", section="ingresos")
         self.assertTrue(data.get("applicable"))
         income = data.get("annual", {}).get("income")
         self.assertIsNotNone(income)
         self.assertEqual(income["periods"], ["2024", "2023"])
         self.assertGreaterEqual(len(income["rows"]), 1)
+
+    def test_income_trends_rejects_negative_revenue(self):
+        import pandas as pd
+
+        qdf = pd.DataFrame(
+            {
+                "2025-06-30": [-13555361681.0, 500.0],
+                "2025-03-31": [12000000000.0, 400.0],
+            },
+            index=["Total Revenue", "Net Income"],
+        )
+        trends = _income_trends(pd.DataFrame(), qdf)
+        quarterly = trends["quarterly"]
+        self.assertEqual(len(quarterly["revenue"]), 1)
+        self.assertEqual(quarterly["revenue"][0]["value"], 12000000000.0)
+        bad_periods = {r["period"] for r in quarterly["revenue"] if r["value"] < 0}
+        self.assertEqual(bad_periods, set())
+        self.assertTrue(all(abs(m["value"]) <= 100 for m in quarterly["margin_pct"]))
+
+    def test_financials_resumen_section(self):
+        from unittest.mock import MagicMock, patch
+
+        import pandas as pd
+
+        df = pd.DataFrame(
+            {"2024": [1000.0, 120.0]},
+            index=["Total Revenue", "Net Income"],
+        )
+        mock_ticker = MagicMock()
+        mock_ticker.info = {"currency": "MXN", "trailingPE": 10, "forwardPE": 9}
+        mock_ticker.financials = df
+        mock_ticker.quarterly_financials = df
+        mock_ticker.balance_sheet = pd.DataFrame()
+
+        with patch("yfinance.Ticker", return_value=mock_ticker):
+            data = get_financials_detail("GFNORTEO", section="resumen")
+        self.assertEqual(data.get("section"), "resumen")
+        self.assertIn("income_trends", data)
+        self.assertNotIn("annual", data)
+
+    def test_holding_position_none_for_unknown(self):
+        self.assertIsNone(get_holding_position("ZZZZNOTREAL"))
 
     def test_rsi_alignment(self):
         points = [{"c": 100 + i + (i % 3) * 0.5} for i in range(30)]

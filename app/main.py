@@ -59,7 +59,9 @@ from app.terminal import (
     get_market_status,
     get_portfolio_live,
     get_financials_detail,
+    get_holding_position,
     get_quote_detail,
+    preload_portfolio_cache,
 )
 from app.catalog import catalog_count, list_catalog, search_catalog
 from app.seed import seed_from_excel
@@ -103,6 +105,10 @@ async def lifespan(app: FastAPI):
         except FileNotFoundError:
             pass
     gbm_task = asyncio.create_task(_gbm_auto_import_loop())
+    try:
+        await run_blocking(preload_portfolio_cache)
+    except Exception:
+        logger.debug("portfolio preload skipped on startup")
     yield
     gbm_task.cancel()
     try:
@@ -237,8 +243,18 @@ async def terminal_quote_api(symbol: str = "IPC"):
 
 
 @app.get("/api/terminal/financials")
-async def terminal_financials_api(symbol: str = "IPC"):
-    return await run_blocking(get_financials_detail, symbol)
+async def terminal_financials_api(symbol: str = "IPC", section: str = "all"):
+    return await run_blocking(get_financials_detail, symbol, section)
+
+
+@app.get("/api/terminal/holding")
+async def terminal_holding_api(symbol: str):
+    quote = await run_blocking(get_quote_detail, symbol)
+    price = quote.get("price") if isinstance(quote, dict) and not quote.get("error") else None
+    holding = await run_blocking(get_holding_position, symbol, price)
+    if not holding:
+        return {"holding": None}
+    return {"holding": holding}
 
 
 @app.get("/api/terminal/catalog")

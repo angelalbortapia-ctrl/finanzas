@@ -1,15 +1,15 @@
-const CACHE = 'finanzas-pro-v54';
+const CACHE = 'finanzas-pro-v57';
 const PRECACHE = [
   '/',
   '/static/app.css?v=28',
   '/static/app.js?v=31',
-  '/static/sw.js?v=54',
+  '/static/sw.js?v=57',
   '/static/chart.umd.min.js?v=1',
   '/static/charts.js?v=18',
-  '/static/terminal.css?v=41',
+  '/static/terminal.css?v=42',
   '/static/terminal.js?v=48',
-  '/static/terminal-financials.js?v=2',
-  '/static/emisora.js?v=2',
+  '/static/terminal-financials.js?v=4',
+  '/static/emisora.js?v=4',
   '/static/lightweight-charts.js?v=2',
   '/static/forge.js?v=8',
   '/static/forge-layout.js?v=3',
@@ -41,7 +41,8 @@ self.addEventListener('fetch', (e) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  if (url.pathname.startsWith('/static/')) {
+  // JS siempre desde red — evita scripts truncados en caché que rompen el análisis
+  if (url.pathname.startsWith('/static/') && !url.pathname.endsWith('.js')) {
     e.respondWith(
       fetch(request)
         .then((res) => {

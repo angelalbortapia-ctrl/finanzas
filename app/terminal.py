@@ -37,10 +37,16 @@ _quote_cache: dict[str, Any] = {"at": 0.0, "data": {}}
 _chart_cache: dict[str, Any] = {"data": {}}
 _cache_lock = threading.Lock()
 NEWS_TTL_SEC = 900
-QUOTE_CACHE_SEC = 20
-CHART_CACHE_SEC = 300
+QUOTE_CACHE_SEC = 120
+CHART_CACHE_SEC = 900
 FINANCIALS_CACHE_SEC = 86400
 FINANCIALS_EMPTY_CACHE_SEC = 300
+FIN_SECTIONS = frozenset({
+    "all", "resumen", "beneficios", "ingresos", "balance", "flujo", "dividendos", "stats",
+})
+ALL_FIN_SECTIONS = (
+    "resumen", "beneficios", "ingresos", "balance", "flujo", "dividendos", "stats",
+)
 _financials_cache: dict[str, Any] = {"data": {}}
 _CACHE_MAX_CHART = 200
 _CACHE_MAX_FINANCIALS = 80
@@ -673,7 +679,12 @@ def _period_label(col: Any) -> str:
     return str(col)[:10]
 
 
-def _df_row_values(df: Any, keys: tuple[str, ...]) -> list[dict[str, Any]]:
+def _df_row_values(
+    df: Any,
+    keys: tuple[str, ...],
+    *,
+    require_positive: bool = False,
+) -> list[dict[str, Any]]:
     if df is None or getattr(df, "empty", True):
         return []
     series = None
@@ -688,28 +699,49 @@ def _df_row_values(df: Any, keys: tuple[str, ...]) -> list[dict[str, Any]]:
         val = _safe_float(raw)
         if val is None:
             continue
+        if require_positive and val <= 0:
+            continue
         out.append({"period": _period_label(col), "value": round(val, 4)})
     out.reverse()
     return out
 
 
+def _valid_margin_pct(revenue: float, net_income: float) -> float | None:
+    if revenue is None or revenue <= 0:
+        return None
+    margin = net_income / revenue * 100
+    if abs(margin) > 100:
+        return None
+    return round(margin, 2)
+
+
 def _income_trends(annual_df: Any, quarterly_df: Any) -> dict[str, Any]:
     def pack(df: Any, annual: bool) -> dict[str, Any]:
-        revenue = _df_row_values(df, ("Total Revenue", "Operating Revenue"))
+        revenue = _df_row_values(
+            df, ("Total Revenue", "Operating Revenue"), require_positive=True,
+        )
         net_income = _df_row_values(df, ("Net Income",))
+        ni_map = {item["period"]: item["value"] for item in net_income}
         margin: list[dict[str, Any]] = []
-        rev_map = {item["period"]: item["value"] for item in revenue}
-        for item in net_income:
-            rev = rev_map.get(item["period"])
-            if rev and rev != 0:
-                margin.append({
-                    "period": item["period"],
-                    "value": round(item["value"] / rev * 100, 2),
-                })
+        clean_revenue: list[dict[str, Any]] = []
+        clean_net: list[dict[str, Any]] = []
+        for rev_item in revenue:
+            period = rev_item["period"]
+            rev = rev_item["value"]
+            ni = ni_map.get(period)
+            if ni is None:
+                clean_revenue.append(rev_item)
+                continue
+            m = _valid_margin_pct(rev, ni)
+            if m is None:
+                continue
+            clean_revenue.append(rev_item)
+            clean_net.append({"period": period, "value": ni})
+            margin.append({"period": period, "value": m})
         return {
-            "periods": [p["period"] for p in revenue],
-            "revenue": revenue,
-            "net_income": net_income,
+            "periods": [p["period"] for p in clean_revenue],
+            "revenue": clean_revenue,
+            "net_income": clean_net,
             "margin_pct": margin,
             "annual": annual,
         }
@@ -718,6 +750,30 @@ def _income_trends(annual_df: Any, quarterly_df: Any) -> dict[str, Any]:
         "annual": pack(annual_df, True),
         "quarterly": pack(quarterly_df, False),
     }
+
+
+def _earnings_from_statement(q_income: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not q_income or not q_income.get("periods"):
+        return []
+    eps_row = next(
+        (r for r in q_income.get("rows") or [] if r.get("key") in ("Basic EPS", "Diluted EPS")),
+        None,
+    )
+    if not eps_row:
+        return []
+    out: list[dict[str, Any]] = []
+    for period, val in zip(q_income["periods"], eps_row.get("values") or []):
+        if val is None:
+            continue
+        out.append({
+            "date": period,
+            "period": period,
+            "reported_eps": val,
+            "estimate_eps": None,
+            "surprise_pct": None,
+            "source": "quarterly_income",
+        })
+    return out[-12:]
 
 
 def _earnings_history(ticker: Any, info: dict) -> dict[str, Any]:
@@ -755,12 +811,24 @@ def _earnings_history(ticker: Any, info: dict) -> dict[str, Any]:
         except (TypeError, ValueError, OSError):
             continue
 
+    trailing = _safe_float(info.get("trailingEps"))
     return {
         "quarterly": quarterly,
         "next_report_date": next_date,
         "forward_eps": forward_eps,
-        "trailing_eps": _safe_float(info.get("trailingEps")),
+        "trailing_eps": trailing,
+        "derived_from_statement": False,
     }
+
+
+def _enrich_earnings(earnings: dict[str, Any], q_income: dict[str, Any] | None) -> dict[str, Any]:
+    if not earnings.get("quarterly") and q_income:
+        derived = _earnings_from_statement(q_income)
+        if derived:
+            earnings = dict(earnings)
+            earnings["quarterly"] = derived
+            earnings["derived_from_statement"] = True
+    return earnings
 
 
 def _dividend_history(ticker: Any, info: dict) -> dict[str, Any]:
@@ -877,7 +945,195 @@ def _df_to_statement(df: Any, max_rows: int = 18) -> dict[str, Any] | None:
     return {"periods": periods, "rows": rows}
 
 
-def get_financials_detail(symbol: str) -> dict[str, Any]:
+def _df_latest_value(df: Any, keys: tuple[str, ...]) -> float | None:
+    if df is None or getattr(df, "empty", True):
+        return None
+    for key in keys:
+        if key not in df.index:
+            continue
+        for col in df.columns:
+            val = _safe_float(df.loc[key, col])
+            if val is not None:
+                return val
+    return None
+
+
+def _dividends_from_info(info: dict) -> dict[str, Any]:
+    div_yield = _safe_float(info.get("dividendYield") or info.get("trailingAnnualDividendYield"))
+    if div_yield is not None and abs(div_yield) < 1:
+        div_yield *= 100
+    div_rate = _safe_float(info.get("dividendRate") or info.get("trailingAnnualDividendRate"))
+    ex_date = None
+    if info.get("exDividendDate"):
+        try:
+            ex_date = datetime.fromtimestamp(int(info["exDividendDate"]), MX_TZ).strftime("%Y-%m-%d")
+        except (TypeError, ValueError, OSError):
+            ex_date = None
+    pays = bool(div_rate or div_yield or info.get("dividendRate"))
+    return {
+        "pays": pays,
+        "yield_pct": div_yield,
+        "rate": div_rate,
+        "ex_date": ex_date,
+        "history": [],
+        "history_loaded": False,
+    }
+
+
+def _financials_has_statements(payload: dict[str, Any]) -> bool:
+    annual = payload.get("annual") or {}
+    quarterly = payload.get("quarterly") or {}
+    return any(annual.values()) or any(quarterly.values())
+
+
+def _financials_section_ready(payload: dict[str, Any], section: str) -> bool:
+    loaded = set(payload.get("sections_loaded") or [])
+    if "all" in loaded:
+        return True
+    if section == "all":
+        return _financials_has_statements(payload)
+    if section in loaded:
+        if section in ("ingresos", "balance", "flujo"):
+            return _financials_has_statements(payload)
+        if section == "dividendos":
+            return (payload.get("dividends") or {}).get("history_loaded", False)
+        return True
+    return False
+
+
+def _merge_financials_payload(existing: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    merged = {**existing, **patch}
+    for key in ("annual", "quarterly"):
+        if existing.get(key) or patch.get(key):
+            merged[key] = {**(existing.get(key) or {}), **(patch.get(key) or {})}
+    loaded = set(existing.get("sections_loaded") or []) | set(patch.get("sections_loaded") or [])
+    merged["sections_loaded"] = sorted(loaded)
+    return merged
+
+
+def _slice_financials(payload: dict[str, Any], section: str) -> dict[str, Any]:
+    if section == "all":
+        return dict(payload)
+    base_keys = (
+        "symbol", "name", "yahoo", "applicable", "currency",
+        "message", "error", "fetched_at", "sections_loaded",
+    )
+    out: dict[str, Any] = {k: payload[k] for k in base_keys if k in payload}
+    out["section"] = section
+    if section == "resumen":
+        for key in ("fundamentals", "income_trends", "earnings", "dividends", "statistics"):
+            if key in payload:
+                out[key] = payload[key]
+    elif section == "beneficios":
+        out["earnings"] = payload.get("earnings")
+    elif section == "ingresos":
+        out["income_trends"] = payload.get("income_trends")
+        out["annual"] = {"income": (payload.get("annual") or {}).get("income")}
+        out["quarterly"] = {"income": (payload.get("quarterly") or {}).get("income")}
+    elif section == "balance":
+        out["annual"] = {"balance": (payload.get("annual") or {}).get("balance")}
+        out["quarterly"] = {"balance": (payload.get("quarterly") or {}).get("balance")}
+    elif section == "flujo":
+        out["annual"] = {"cashflow": (payload.get("annual") or {}).get("cashflow")}
+        out["quarterly"] = {"cashflow": (payload.get("quarterly") or {}).get("cashflow")}
+    elif section == "dividendos":
+        out["dividends"] = payload.get("dividends")
+    elif section == "stats":
+        out["statistics"] = payload.get("statistics")
+        out["fundamentals"] = payload.get("fundamentals")
+    return out
+
+
+def _cache_financials_payload(cache_key: str, payload: dict[str, Any]) -> None:
+    has_data = _financials_has_statements(payload)
+    has_earnings = bool((payload.get("earnings") or {}).get("quarterly"))
+    cache_ttl = (
+        FINANCIALS_CACHE_SEC
+        if has_data or has_earnings
+        else FINANCIALS_EMPTY_CACHE_SEC
+    )
+    with _cache_lock:
+        _cache_put(
+            _financials_cache,
+            cache_key,
+            dict(payload),
+            ttl=cache_ttl,
+            max_items=_CACHE_MAX_FINANCIALS,
+        )
+
+
+def _fetch_financials_resumen(
+    meta: dict[str, Any],
+    ticker: Any,
+    info: dict[str, Any],
+) -> dict[str, Any]:
+    yahoo = meta["yahoo"]
+    q_income_stmt = _df_to_statement(ticker.quarterly_financials)
+    fundamentals = _quote_fundamentals(meta, info, balance_df=ticker.balance_sheet)
+    earnings = _enrich_earnings(_earnings_history(ticker, info), q_income_stmt)
+    return {
+        "symbol": meta["symbol"],
+        "name": meta["name"],
+        "yahoo": yahoo,
+        "applicable": True,
+        "currency": info.get("currency", "MXN"),
+        "fundamentals": fundamentals,
+        "income_trends": _income_trends(ticker.financials, ticker.quarterly_financials),
+        "earnings": earnings,
+        "dividends": _dividends_from_info(info),
+        "statistics": _extended_statistics(info, fundamentals),
+        "fetched_at": _now(),
+        "sections_loaded": ["resumen", "beneficios", "stats"],
+    }
+
+
+def _fetch_financials_full(
+    meta: dict[str, Any],
+    ticker: Any,
+    info: dict[str, Any],
+) -> dict[str, Any]:
+    income = _df_to_statement(ticker.financials)
+    balance = _df_to_statement(ticker.balance_sheet)
+    cashflow = _df_to_statement(ticker.cashflow)
+    q_income = _df_to_statement(ticker.quarterly_financials)
+    q_balance = _df_to_statement(ticker.quarterly_balance_sheet)
+    q_cashflow = _df_to_statement(ticker.quarterly_cashflow)
+    fundamentals = _quote_fundamentals(meta, info, balance_df=ticker.balance_sheet)
+    annual = {"income": income, "balance": balance, "cashflow": cashflow}
+    quarterly = {
+        "income": q_income,
+        "balance": q_balance,
+        "cashflow": q_cashflow,
+    }
+    earnings = _enrich_earnings(_earnings_history(ticker, info), q_income)
+    dividends = _dividend_history(ticker, info)
+    dividends["history_loaded"] = True
+    result: dict[str, Any] = {
+        "symbol": meta["symbol"],
+        "name": meta["name"],
+        "yahoo": meta["yahoo"],
+        "applicable": True,
+        "currency": info.get("currency", "MXN"),
+        "annual": annual,
+        "quarterly": quarterly,
+        "income_trends": _income_trends(ticker.financials, ticker.quarterly_financials),
+        "earnings": earnings,
+        "dividends": dividends,
+        "statistics": _extended_statistics(info, fundamentals),
+        "fundamentals": fundamentals,
+        "fetched_at": _now(),
+        "sections_loaded": list(ALL_FIN_SECTIONS),
+    }
+    if not _financials_has_statements(result) and not earnings.get("quarterly"):
+        result["message"] = "Estados financieros no disponibles para esta emisora en Yahoo Finance"
+    return result
+
+
+def get_financials_detail(symbol: str, section: str = "all") -> dict[str, Any]:
+    section = (section or "all").strip().lower()
+    if section not in FIN_SECTIONS:
+        section = "all"
+
     meta = get_symbol_meta(symbol)
     if not meta:
         return {"error": "Símbolo no encontrado"}
@@ -892,8 +1148,10 @@ def get_financials_detail(symbol: str) -> dict[str, Any]:
     cache_key = meta["symbol"]
     with _cache_lock:
         cached = _cache_get(_financials_cache, cache_key, FINANCIALS_CACHE_SEC)
-        if cached:
-            return dict(cached["payload"])
+    payload = dict(cached["payload"]) if cached else {}
+
+    if payload and _financials_section_ready(payload, section):
+        return _slice_financials(payload, section)
 
     import yfinance as yf
 
@@ -901,12 +1159,6 @@ def get_financials_detail(symbol: str) -> dict[str, Any]:
     try:
         ticker = yf.Ticker(yahoo)
         info = ticker.info or {}
-        income = _df_to_statement(ticker.financials)
-        balance = _df_to_statement(ticker.balance_sheet)
-        cashflow = _df_to_statement(ticker.cashflow)
-        q_income = _df_to_statement(ticker.quarterly_financials)
-        q_balance = _df_to_statement(ticker.quarterly_balance_sheet)
-        q_cashflow = _df_to_statement(ticker.quarterly_cashflow)
     except Exception as exc:
         logger.warning("financials fetch failed for %s: %s", yahoo, exc)
         return {
@@ -914,59 +1166,78 @@ def get_financials_detail(symbol: str) -> dict[str, Any]:
             "symbol": meta["symbol"],
         }
 
-    fundamentals = _quote_fundamentals(meta, info)
-    annual = {"income": income, "balance": balance, "cashflow": cashflow}
-    quarterly = {
-        "income": q_income,
-        "balance": q_balance,
-        "cashflow": q_cashflow,
-    }
-    has_data = any(annual.values()) or any(quarterly.values())
-    currency = info.get("currency", "MXN")
-    result: dict[str, Any] = {
-        "symbol": meta["symbol"],
-        "name": meta["name"],
-        "yahoo": yahoo,
-        "applicable": True,
-        "currency": currency,
-        "annual": annual,
-        "quarterly": quarterly,
-        "income_trends": _income_trends(ticker.financials, ticker.quarterly_financials),
-        "earnings": _earnings_history(ticker, info),
-        "dividends": _dividend_history(ticker, info),
-        "statistics": _extended_statistics(info, fundamentals),
-        "fundamentals": fundamentals,
-        "fetched_at": _now(),
-    }
-    if not has_data and not result["earnings"].get("quarterly"):
-        result["message"] = "Estados financieros no disponibles para esta emisora en Yahoo Finance"
+    needs_full = section in ("all", "ingresos", "balance", "flujo", "dividendos")
+    if needs_full or (section == "stats" and not payload.get("statistics")):
+        try:
+            patch = _fetch_financials_full(meta, ticker, info)
+        except Exception as exc:
+            logger.warning("financials full fetch failed for %s: %s", yahoo, exc)
+            return {
+                "error": "No se pudieron obtener datos financieros",
+                "symbol": meta["symbol"],
+            }
+        result = _merge_financials_payload(payload, patch) if payload else patch
+    else:
+        try:
+            patch = _fetch_financials_resumen(meta, ticker, info)
+        except Exception as exc:
+            logger.warning("financials resumen fetch failed for %s: %s", yahoo, exc)
+            return {
+                "error": "No se pudieron obtener datos financieros",
+                "symbol": meta["symbol"],
+            }
+        result = _merge_financials_payload(payload, patch) if payload else patch
 
-    cache_ttl = (
-        FINANCIALS_CACHE_SEC
-        if has_data or result["earnings"].get("quarterly")
-        else FINANCIALS_EMPTY_CACHE_SEC
-    )
-    with _cache_lock:
-        _cache_put(
-            _financials_cache,
-            cache_key,
-            dict(result),
-            ttl=cache_ttl,
-            max_items=_CACHE_MAX_FINANCIALS,
-        )
-    return result
+    _cache_financials_payload(cache_key, result)
+    return _slice_financials(result, section)
 
 
-def _quote_fundamentals(meta: dict, info: dict) -> dict[str, Any]:
+def _quote_fundamentals(
+    meta: dict,
+    info: dict,
+    *,
+    balance_df: Any = None,
+) -> dict[str, Any]:
     sector = info.get("sector") or meta.get("sector")
     industry = info.get("industry")
+    price = _safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
+    market_cap = _safe_float(info.get("marketCap"))
+    shares_outstanding = _safe_float(info.get("sharesOutstanding"))
+    market_cap_estimated = False
+    shares_estimated = False
+    book_value = _safe_float(info.get("bookValue"))
+
+    if shares_outstanding is None and book_value and book_value > 0:
+        equity = _df_latest_value(balance_df, (
+            "Stockholders Equity",
+            "Total Stockholder Equity",
+            "Total Equity Gross Minority Interest",
+            "Common Stock Equity",
+        ))
+        if equity and equity > 0:
+            shares_outstanding = equity / book_value
+            shares_estimated = True
+
+    if market_cap is None:
+        if shares_outstanding and price:
+            market_cap = shares_outstanding * price
+            market_cap_estimated = True
+        else:
+            ev = _safe_float(info.get("enterpriseValue"))
+            debt = _safe_float(info.get("totalDebt")) or 0
+            cash = _safe_float(info.get("totalCash")) or 0
+            if ev is not None:
+                market_cap = ev - debt + cash
+                market_cap_estimated = True
+
     return {
         "sector": sector,
         "industry": industry,
         "kind": meta.get("kind", "stock"),
         "board": meta.get("board"),
         "board_title": meta.get("board_title"),
-        "market_cap": _safe_float(info.get("marketCap")),
+        "market_cap": market_cap,
+        "market_cap_estimated": market_cap_estimated,
         "enterprise_value": _safe_float(info.get("enterpriseValue")),
         "pe_trailing": _safe_float(info.get("trailingPE")),
         "pe_forward": _safe_float(info.get("forwardPE")),
@@ -979,9 +1250,10 @@ def _quote_fundamentals(meta: dict, info: dict) -> dict[str, Any]:
         "ebitda": _safe_float(info.get("ebitda")),
         "total_cash": _safe_float(info.get("totalCash")),
         "total_debt": _safe_float(info.get("totalDebt")),
-        "book_value": _safe_float(info.get("bookValue")),
+        "book_value": book_value,
         "avg_volume": _safe_float(info.get("averageVolume")),
-        "shares_outstanding": _safe_float(info.get("sharesOutstanding")),
+        "shares_outstanding": shares_outstanding,
+        "shares_estimated": shares_estimated,
     }
 
 
@@ -1561,3 +1833,60 @@ def get_terminal_context(holdings: list[dict] | None = None) -> dict:
             {"id": "max", "label": "MAX", "key": "0"},
         ],
     }
+
+
+def get_holding_position(symbol: str, live_price: float | None = None) -> dict[str, Any] | None:
+    """Posición del portafolio local para una emisora (si existe)."""
+    from app.database import get_db
+
+    key = symbol.replace("BMV:", "").strip().upper()
+    conn = get_db()
+    row = conn.execute(
+        """SELECT * FROM investment_holdings
+           WHERE UPPER(REPLACE(ticker, 'BMV:', '')) = ? AND shares > 0
+           LIMIT 1""",
+        (key,),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+
+    h = dict(row)
+    shares = float(h.get("shares") or 0)
+    avg_cost = float(h.get("avg_cost") or 0)
+    price = live_price if live_price is not None else float(h.get("market_price") or 0)
+    cost_basis = shares * avg_cost
+    market_value = shares * price if price else float(h.get("market_value") or 0)
+    pnl_abs = market_value - cost_basis
+    pnl_pct = (pnl_abs / cost_basis * 100) if cost_basis else 0.0
+    return {
+        "ticker": key,
+        "name": h.get("name"),
+        "shares": shares,
+        "avg_cost": avg_cost,
+        "market_price": price,
+        "cost_basis": round(cost_basis, 2),
+        "market_value": round(market_value, 2),
+        "unrealized_pnl_abs": round(pnl_abs, 2),
+        "unrealized_pnl_pct": round(pnl_pct, 2),
+        "weight_pct": round(float(h.get("weight_pct") or 0), 2),
+        "target_weight_pct": None,
+    }
+
+
+def preload_portfolio_cache() -> None:
+    """Precarga cotizaciones y resumen financiero de posiciones del portafolio."""
+    from app.database import get_db
+
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT ticker FROM investment_holdings WHERE shares > 0 ORDER BY market_value DESC LIMIT 8"
+    ).fetchall()
+    conn.close()
+    for row in rows:
+        sym = str(row["ticker"]).replace("BMV:", "")
+        try:
+            get_quote_detail(sym)
+            get_financials_detail(sym, section="resumen")
+        except Exception as exc:
+            logger.debug("portfolio preload failed for %s: %s", sym, exc)

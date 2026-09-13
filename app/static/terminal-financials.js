@@ -1,5 +1,47 @@
 /* Panel financiero estilo TradingView para el terminal GBM */
 
+function escHtml(s) {
+  if (typeof window.escHtml === 'function' && window.escHtml !== escHtml) {
+    return window.escHtml(s);
+  }
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function bbFmt(n, dec = 2) {
+  if (typeof window.bbFmt === 'function' && window.bbFmt !== bbFmt) {
+    return window.bbFmt(n, dec);
+  }
+  if (n == null || isNaN(n)) return '—';
+  return '$' + Number(n).toFixed(dec);
+}
+
+function bbFmtLarge(n, currency) {
+  if (typeof window.bbFmtLarge === 'function' && window.bbFmtLarge !== bbFmtLarge) {
+    return window.bbFmtLarge(n, currency);
+  }
+  if (n == null || isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  const cur = currency === 'USD' ? 'US$' : '$';
+  if (abs >= 1e12) return cur + (n / 1e12).toFixed(2) + 'T';
+  if (abs >= 1e9) return cur + (n / 1e9).toFixed(2) + 'B';
+  if (abs >= 1e6) return cur + (n / 1e6).toFixed(2) + 'M';
+  if (abs >= 1e4) return cur + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return cur + Number(n).toFixed(2);
+}
+
+function formatQuotePrice(value, kind) {
+  if (typeof window.formatQuotePrice === 'function' && window.formatQuotePrice !== formatQuotePrice) {
+    return window.formatQuotePrice(value, kind);
+  }
+  if (value == null || isNaN(value)) return '—';
+  if (kind === 'fx' || kind === 'index') return Number(value).toFixed(4);
+  return bbFmt(value);
+}
+
 const FIN_TABS = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'beneficios', label: 'Beneficios' },
@@ -227,18 +269,38 @@ function finPeriodToggle(id, onChange) {
   </div>`;
 }
 
+function finPeLabel(trailing, forward) {
+  const t = trailing != null ? Number(trailing).toFixed(1) : '—';
+  const f = forward != null ? Number(forward).toFixed(1) : '—';
+  if (trailing != null && forward != null) return `${t} / ${f}`;
+  return trailing != null ? t : f;
+}
+
+function finYieldLabel(quote) {
+  const y = quote?.dividend_yield ?? quote?.fundamentals?.dividend_yield;
+  if (y == null || isNaN(y)) return '—';
+  const pct = Math.abs(y) < 1 ? y * 100 : y;
+  const ex = quote?.ex_dividend_date;
+  return ex ? `${Number(pct).toFixed(2)}% · ex ${ex}` : `${Number(pct).toFixed(2)}%`;
+}
+
 function finRenderResumen(quote, data) {
   const f = data.fundamentals || quote?.fundamentals || {};
   const earn = data.earnings || {};
   const cur = data.currency || quote?.currency || 'MXN';
   const nextDate = earn.next_report_date;
   const fwd = earn.forward_eps;
+  const qTrend = data.income_trends?.quarterly?.margin_pct || [];
+  const lastMargin = qTrend.length ? qTrend[qTrend.length - 1].value : null;
+  const capLabel = f.market_cap_estimated ? 'Cap. bursátil (est.)' : 'Cap. bursátil';
+  const capVal = f.market_cap != null ? finFmtVal(f.market_cap, cur) : '—';
   return `
     <div class="bb-fin-kpis">
-      <div class="bb-fin-kpi"><span>Cap. bursátil</span><strong>${finFmtVal(f.market_cap, cur)}</strong></div>
-      <div class="bb-fin-kpi"><span>P/E</span><strong>${f.pe_trailing != null ? Number(f.pe_trailing).toFixed(2) : '—'}</strong></div>
-      <div class="bb-fin-kpi"><span>UTPA</span><strong>${f.eps != null ? Number(f.eps).toFixed(2) : '—'}</strong></div>
-      <div class="bb-fin-kpi"><span>Margen</span><strong>${f.profit_margin != null ? Number(f.profit_margin).toFixed(1) + '%' : '—'}</strong></div>
+      <div class="bb-fin-kpi"><span>P/E trail / fwd</span><strong>${finPeLabel(f.pe_trailing, f.pe_forward)}</strong></div>
+      <div class="bb-fin-kpi"><span>Yield / ex-div</span><strong>${finYieldLabel(quote)}</strong></div>
+      <div class="bb-fin-kpi"><span>P/B</span><strong>${f.price_to_book != null ? Number(f.price_to_book).toFixed(2) : '—'}</strong></div>
+      <div class="bb-fin-kpi"><span>Margen trim.</span><strong>${lastMargin != null ? Number(lastMargin).toFixed(1) + '%' : (f.profit_margin != null ? Number(f.profit_margin).toFixed(1) + '%' : '—')}</strong></div>
+      ${f.market_cap != null ? `<div class="bb-fin-kpi bb-fin-kpi--muted"><span>${capLabel}</span><strong>${capVal}</strong></div>` : ''}
     </div>
     ${nextDate ? `<div class="bb-fin-next-report">
       <div><span>Próximo reporte</span><strong>${escHtml(nextDate)}</strong></div>
@@ -262,11 +324,23 @@ function finRenderResumen(quote, data) {
 }
 
 function finRenderBeneficios(data) {
-  const rows = (data.earnings?.quarterly || []).slice(-12);
+  const earn = data.earnings || {};
+  const rows = (earn.quarterly || []).slice(-12);
+  const trailing = earn.trailing_eps;
+  const forward = earn.forward_eps;
+  const cur = data.currency || 'MXN';
+  const floor = `
+    <div class="bb-fin-kpis bb-fin-kpis--eps">
+      <div class="bb-fin-kpi"><span>BPA trailing</span><strong>${trailing != null ? Number(trailing).toFixed(2) : '—'}</strong></div>
+      <div class="bb-fin-kpi"><span>BPA forward</span><strong>${forward != null ? Number(forward).toFixed(2) : '—'}</strong></div>
+    </div>`;
   if (!rows.length) {
-    return '<p class="bb-fin-empty">Sin historial de beneficios (BPA) para esta emisora</p>';
+    const note = earn.derived_from_statement
+      ? 'BPA trimestral derivado del estado de resultados (Yahoo no publica earnings dates).'
+      : 'Reporte trimestral no disponible para esta emisora en Yahoo Finance.';
+    return `${floor}<p class="bb-fin-note">${escHtml(note)}</p>`;
   }
-  const labels = rows.map(r => r.period || r.date.slice(0, 7));
+  const labels = rows.map(r => r.period || (r.date || '').slice(0, 7));
   const reported = rows.map(r => r.reported_eps);
   const estimate = rows.map(r => r.estimate_eps);
   const tableHead = `<tr><th></th>${labels.map(l => `<th>${escHtml(l)}</th>`).join('')}</tr>`;
@@ -277,7 +351,12 @@ function finRenderBeneficios(data) {
     const cls = finSurpriseClass(v);
     return `<td class="${cls}">${v != null ? (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%' : '—'}</td>`;
   }).join('')}</tr>`;
+  const derivedNote = earn.derived_from_statement
+    ? '<p class="bb-fin-note">BPA trimestral derivado del estado de resultados.</p>'
+    : '';
   return `
+    ${floor}
+    ${derivedNote}
     <div class="bb-fin-section">
       <div class="bb-fin-section-head"><span>BPA (utilidad por acción)</span></div>
       <div class="bb-fin-chart-box"><canvas id="finChartEps"></canvas></div>
@@ -359,10 +438,19 @@ function finRenderStats(data) {
   ).join('')}</div>`;
 }
 
+function finWaitForChart(cb, tries = 40) {
+  if (typeof Chart !== 'undefined') {
+    cb();
+    return;
+  }
+  if (tries <= 0) return;
+  setTimeout(() => finWaitForChart(cb, tries - 1), 150);
+}
+
 function finBindCharts(tab, data) {
-  requestAnimationFrame(() => {
+  finWaitForChart(() => {
     if (tab === 'resumen' || tab === 'ingresos') {
-      const annual = BB.finPeriod !== 'quarterly';
+      const annual = finGetPeriod() !== 'quarterly';
       finIncomeComboChart(
         tab === 'resumen' ? 'finChartIncomeResumen' : 'finChartIncomeMain',
         data.income_trends || {},
@@ -446,6 +534,59 @@ function finBindPeriodToggles(data) {
   });
 }
 
+function finMergeFinancials(base, patch) {
+  const out = { ...(base || {}), ...(patch || {}) };
+  ['annual', 'quarterly'].forEach(key => {
+    if (base?.[key] || patch?.[key]) {
+      out[key] = { ...(base?.[key] || {}), ...(patch?.[key] || {}) };
+    }
+  });
+  if (patch?.earnings) out.earnings = { ...(base?.earnings || {}), ...patch.earnings };
+  if (patch?.dividends) out.dividends = { ...(base?.dividends || {}), ...patch.dividends };
+  const loaded = new Set([...(base?.sections_loaded || []), ...(patch?.sections_loaded || [])]);
+  if (patch?.section) loaded.add(patch.section);
+  out.sections_loaded = Array.from(loaded);
+  return out;
+}
+
+function finSectionLoaded(data, tab) {
+  const loaded = new Set(data?.sections_loaded || []);
+  if (loaded.has('all') || loaded.has(tab)) return true;
+  if (tab === 'resumen') return Boolean(data?.income_trends);
+  if (tab === 'beneficios') return Boolean(data?.earnings);
+  if (tab === 'ingresos') return Boolean(data?.annual?.income || data?.quarterly?.income);
+  if (tab === 'balance') return Boolean(data?.annual?.balance || data?.quarterly?.balance);
+  if (tab === 'flujo') return Boolean(data?.annual?.cashflow || data?.quarterly?.cashflow);
+  if (tab === 'dividendos') return Boolean(data?.dividends?.history_loaded || data?.dividends?.history?.length);
+  if (tab === 'stats') return Boolean(data?.statistics?.length);
+  return false;
+}
+
+function finSkeletonHtml(tab) {
+  const blocks = tab === 'resumen' ? 4 : 2;
+  return `<div class="bb-fin-skeleton" aria-busy="true">
+    ${Array.from({ length: blocks }, () => '<div class="bb-fin-skeleton-block"></div>').join('')}
+  </div>`;
+}
+
+function finTabStatus(data, tab) {
+  const at = data?.section_fetched_at?.[tab] || data?.fetched_at;
+  return at ? `Yahoo Finance · ${at}` : '';
+}
+
+async function loadFinSection(symbol, tab) {
+  const st = finState();
+  const sym = (symbol || '').replace('BMV:', '').toUpperCase();
+  const res = await fetch(`/api/terminal/financials?symbol=${encodeURIComponent(sym)}&section=${encodeURIComponent(tab)}`);
+  if (!res.ok) throw new Error('financials');
+  const patch = await res.json();
+  if (patch.error) throw new Error(patch.error);
+  st.lastFinancials = finMergeFinancials(st.lastFinancials, patch);
+  st.section_fetched_at = st.section_fetched_at || {};
+  st.section_fetched_at[tab] = patch.fetched_at || new Date().toISOString();
+  return st.lastFinancials;
+}
+
 function renderFinHub(quote, data, tab) {
   const hub = document.getElementById('bbFinHub');
   const nav = document.getElementById('bbFinNav');
@@ -456,6 +597,9 @@ function renderFinHub(quote, data, tab) {
   const onPage = document.body.classList.contains('page-emisora');
   if (!quote || quote.error || !data || data.error || !data.applicable) {
     if (!onPage) hub.hidden = true;
+    if (onPage && status) {
+      status.textContent = data?.error || data?.message || 'Información financiera no disponible';
+    }
     return;
   }
 
@@ -465,7 +609,7 @@ function renderFinHub(quote, data, tab) {
   if (!finGetPeriod()) finSetPeriod('annual');
 
   nav.innerHTML = FIN_TABS.map(t =>
-    `<button type="button" class="bb-fin-nav-btn${t.id === activeTab ? ' active' : ''}" data-fin-tab="${t.id}">${t.label}</button>`
+    `<button type="button" class="bb-fin-nav-btn${t.id === activeTab ? ' active' : ''}" data-fin-tab="${t.id}" role="tab">${t.label}</button>`
   ).join('');
 
   destroyFinCharts();
@@ -479,36 +623,58 @@ function renderFinHub(quote, data, tab) {
   else if (activeTab === 'dividendos') html = finRenderDividendos(data);
   else if (activeTab === 'stats') html = finRenderStats(data);
 
-  content.innerHTML = html;
-  if (status) {
-    status.textContent = data.fetched_at ? `Yahoo Finance · ${data.fetched_at}` : '';
+  try {
+    content.innerHTML = html;
+    if (status) status.textContent = finTabStatus(data, activeTab);
+    finBindCharts(activeTab, data);
+    finBindQuoteGrid(quote);
+    finBindPeriodToggles(data);
+  } catch (err) {
+    console.error('renderFinHub', err);
+    content.innerHTML = '<p class="bb-fin-empty">Error al mostrar la información financiera</p>';
+    if (status) status.textContent = 'Error de visualización';
   }
 
-  finBindCharts(activeTab, data);
-  finBindQuoteGrid(quote);
-  finBindPeriodToggles(data);
-
   nav.querySelectorAll('.bb-fin-nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      finSetTab(btn.dataset.finTab);
-      if (onPage && FIN_PAGE.lastQuote && FIN_PAGE.lastFinancials) {
-        const sym = document.getElementById('bbEmisoraSymbol')?.textContent;
-        history.replaceState(null, '', `/emisora/${encodeURIComponent(sym || '')}?tab=${btn.dataset.finTab}`);
+    btn.addEventListener('click', async () => {
+      const nextTab = btn.dataset.finTab;
+      finSetTab(nextTab);
+      const finPage = window.FIN_PAGE;
+      const sym = document.getElementById('bbEmisoraSymbol')?.textContent;
+      if (onPage && sym) {
+        history.replaceState(null, '', `/emisora/${encodeURIComponent(sym)}?tab=${nextTab}`);
       }
-      renderFinHub(quote, data, btn.dataset.finTab);
+      if (onPage && sym && !finSectionLoaded(finPage?.lastFinancials, nextTab)) {
+        content.innerHTML = finSkeletonHtml(nextTab);
+        if (status) status.textContent = 'Cargando…';
+        try {
+          const merged = await loadFinSection(sym, nextTab);
+          renderFinHub(quote, merged, nextTab);
+        } catch (_) {
+          content.innerHTML = '<p class="bb-fin-empty">No se pudieron cargar los datos</p>';
+        }
+        return;
+      }
+      renderFinHub(quote, finPage?.lastFinancials || data, nextTab);
     });
   });
 }
 
 function showFinHubLoading() {
   const hub = document.getElementById('bbFinHub');
+  const nav = document.getElementById('bbFinNav');
   const content = document.getElementById('bbFinContent');
   const status = document.getElementById('bbFinStatus');
   if (!hub || !content) return;
   hub.hidden = false;
   destroyFinCharts();
-  content.innerHTML = '<p class="bb-fin-empty">Cargando información financiera…</p>';
-  if (status) status.textContent = '';
+  if (nav) {
+    nav.innerHTML = FIN_TABS.map(t =>
+      `<button type="button" class="bb-fin-nav-btn${t.id === 'resumen' ? ' active' : ''}" disabled>${t.label}</button>`
+    ).join('');
+  }
+  content.innerHTML = finSkeletonHtml('resumen');
+  if (status) status.textContent = 'Cargando resumen…';
 }
 
 function hideFinHub() {

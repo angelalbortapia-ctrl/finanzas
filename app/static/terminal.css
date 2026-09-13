@@ -958,9 +958,92 @@
   width: 100%;
   height: 100%;
 }
+.bb-fin-kpi--muted strong { color: var(--bb-muted); font-size: .9em; }
+.bb-fin-kpis--eps { margin-bottom: .45rem; }
+.bb-fin-note {
+  font-size: var(--bb-fs-sm);
+  color: var(--bb-muted);
+  margin: 0 0 .5rem;
+  padding: 0 .1rem;
+}
+.bb-fin-skeleton { display: grid; gap: .45rem; }
+.bb-fin-skeleton-block {
+  height: 3.2rem;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(22,28,40,.9) 0%, rgba(40,48,64,.9) 50%, rgba(22,28,40,.9) 100%);
+  background-size: 200% 100%;
+  animation: bb-fin-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes bb-fin-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.bb-emisora-holding {
+  width: 100%;
+  margin-top: .5rem;
+  padding: .45rem .55rem;
+  border: 1px solid rgba(212, 168, 83, .25);
+  border-radius: 6px;
+  background: rgba(212, 168, 83, .06);
+}
+.bb-emisora-holding-title {
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--bb-amber);
+  margin-bottom: .35rem;
+}
+.bb-emisora-holding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .35rem .65rem;
+  font-size: var(--bb-fs-sm);
+}
+.bb-emisora-holding-grid span {
+  display: block;
+  font-size: .58rem;
+  color: var(--bb-muted);
+}
+.bb-emisora-holding-grid strong { font-family: var(--bb-mono); }
+.bb-emisora-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.bb-emisora-periods {
+  display: flex;
+  gap: .15rem;
+}
+.bb-emisora-period-btn {
+  border: 1px solid var(--bb-line);
+  background: transparent;
+  color: var(--bb-muted);
+  font-family: var(--bb-mono);
+  font-size: .58rem;
+  padding: .12rem .4rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.bb-emisora-period-btn.active,
+.bb-emisora-period-btn:hover {
+  color: var(--bb-amber);
+  border-color: rgba(212, 168, 83, .45);
+}
 .bb-fin-hub--page .bb-fin-nav {
   position: static;
   padding: .5rem .55rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.bb-fin-hub--page .bb-fin-nav::-webkit-scrollbar { display: none; }
+.bb-fin-hub--page .bb-fin-nav-btn {
+  scroll-snap-align: start;
+  flex-shrink: 0;
 }
 .bb-fin-hub--page .bb-fin-content {
   padding: .5rem .55rem 1rem;

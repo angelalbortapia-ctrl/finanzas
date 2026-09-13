@@ -33,11 +33,20 @@
       </div>
       <a href="/inversiones?symbol={{ symbol | urlencode }}" class="bb-emisora-chart-link">Ver en terminal</a>
     </div>
+    <div class="bb-emisora-holding" id="bbEmisoraHolding" hidden></div>
   </header>
 
   <div class="bb-emisora-grid">
     <section class="bb-emisora-chart-panel bb-panel">
-      <div class="bb-pane-subhead"><span>Precio · 6 meses</span></div>
+      <div class="bb-pane-subhead bb-emisora-chart-head">
+        <span id="bbEmisoraChartLabel">Precio · 6M</span>
+        <div class="bb-emisora-periods" role="group" aria-label="Periodo de gráfica">
+          <button type="button" class="bb-emisora-period-btn" data-chart-period="1mo">1M</button>
+          <button type="button" class="bb-emisora-period-btn active" data-chart-period="6mo">6M</button>
+          <button type="button" class="bb-emisora-period-btn" data-chart-period="1y">1A</button>
+          <button type="button" class="bb-emisora-period-btn" data-chart-period="5y">5A</button>
+        </div>
+      </div>
       <div class="bb-emisora-chart-wrap">
         <div id="bbEmisoraChartStatus" class="bb-chart-status"></div>
         <div id="bbEmisoraChart"></div>
@@ -67,24 +76,19 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/chart.umd.min.js?v={{ static_v.chart_umd_js }}"></script>
 <script src="/static/terminal-financials.js?v={{ static_v.terminal_financials_js }}"></script>
 <script src="/static/emisora.js?v={{ static_v.emisora_js }}"></script>
 <script>
-(function () {
-  function boot() {
-    if (typeof window.bootEmisoraPage !== 'function') {
-      const el = document.getElementById('bbFinStatus');
-      if (el) el.textContent = 'No se cargaron los scripts. Reinicia el servidor y recarga (Cmd+Shift+R).';
-      return;
-    }
-    window.bootEmisoraPage({
-      symbol: {{ symbol | tojson }},
-      tab: {{ (request.query_params.get('tab') or 'resumen') | tojson }},
-    });
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
-})();
+try {
+  if (typeof window.bootEmisoraPage !== 'function') throw new Error('emisora.js');
+  window.bootEmisoraPage({
+    symbol: {{ symbol | tojson }},
+    tab: {{ (request.query_params.get('tab') or 'resumen') | tojson }},
+  });
+} catch (e) {
+  const el = document.getElementById('bbFinStatus');
+  if (el) el.textContent = 'Error al cargar scripts — recarga con Cmd+Shift+R';
+}
 </script>
+<script async src="/static/chart.umd.min.js?v={{ static_v.chart_umd_js }}"></script>
 {% endblock %}
