@@ -1,51 +1,69 @@
 {% extends "base.html" %}
 {% block title %}Configuración — Finanzas{% endblock %}
-{% block page_title %}Configuración{% endblock %}
+{% block page_title %}{% endblock %}
 {% block content %}
 
-<div class="card reveal" style="max-width:560px">
-  <div class="card-head"><div class="card-title">Arranque automático</div></div>
-  <div class="card-body">
-    <p style="font-size:.88rem;color:var(--muted);margin-bottom:1rem">
-      Para que la app siempre esté disponible, ejecuta <strong>instalar-servicio.command</strong> en la carpeta Finanzas.
-      Luego usa <strong>abrir.command</strong> o visita la URL guardada en <code>.url</code>.
-    </p>
-    <p style="font-size:.85rem;color:var(--muted)">URL actual: lee el archivo <code>.url</code> en la carpeta del proyecto.</p>
-  </div>
-</div>
+<div class="bb-page" id="bbPage" data-fx-page="settings">
+  <header class="bb-page-bar">
+    <div>
+      <h1 class="bb-page-title">Configuración</h1>
+      <p class="bb-page-sub">Servicio, PIN y datos</p>
+    </div>
+  </header>
 
-<div class="card reveal" style="max-width:560px">
-  <div class="card-head"><div class="card-title">PIN de escritura (opcional)</div></div>
-  <div class="card-body">
-    <p style="font-size:.88rem;color:var(--muted);margin-bottom:.5rem">
-      Para proteger POST (movimientos, importar Excel, etc.) en red local, define la variable de entorno
-      <code>FINANZAS_PIN</code> antes de arrancar el servidor. Sin PIN, cualquiera en tu red puede modificar datos.
-    </p>
-    <p style="font-size:.85rem;color:var(--muted)">Estado actual: <strong>{% if pin_enabled() %}activo{% else %}desactivado{% endif %}</strong></p>
-  </div>
-</div>
-
-<div class="card reveal" style="max-width:560px">
-  <div class="card-head"><div class="card-title">Reimportar Excel de tarjetas</div></div>
-  <div class="card-body">
+  <div class="bb-page-body" style="max-width:640px;margin:0 auto;padding:.75rem">
     {% if request.query_params.get('ok') %}
-    <div class="alert alert-good" style="margin-bottom:1rem">Datos reimportados correctamente.</div>
+    <div class="bb-flash ok">✓ Datos reimportados correctamente</div>
+    {% elif request.query_params.get('error') %}
+    <div class="bb-flash err">{{ request.query_params.get('msg') or 'Debes escribir REIMPORTAR para confirmar.' }}</div>
     {% endif %}
-    {% if request.query_params.get('error') %}
-    <div class="alert alert-bad" style="margin-bottom:1rem">{{ request.query_params.get('msg') or 'Debes escribir REIMPORTAR para confirmar.' }}</div>
-    {% endif %}
-    <p style="font-size:.88rem;color:var(--bad);margin-bottom:1rem">
-      ⚠️ Esto <strong>borra</strong> tarjetas, categorías, patrimonio y gastos fijos, y los vuelve a cargar desde <code>Tarjetas.xlsx</code>.
-    </p>
-    <form action="/importar" method="post" class="form-grid">
-      <div class="field" style="grid-column:1/-1">
-        <label>Escribe REIMPORTAR para confirmar</label>
-        <input name="confirm" required placeholder="REIMPORTAR" autocomplete="off">
+
+    <section class="bb-panel" style="margin-bottom:.65rem">
+      <header class="bb-panel-head"><h2>Arranque automático</h2></header>
+      <div class="bb-panel-body">
+        <p style="font-size:.82rem;color:var(--bb-muted);line-height:1.5">
+          Ejecuta <strong>instalar-servicio.command</strong> en la carpeta Finanzas.
+          Luego usa <strong>abrir.command</strong> o la URL en <code style="color:var(--bb-amber)">.url</code>.
+        </p>
       </div>
-      <div class="field">
-        <button type="submit" class="btn btn-primary" style="background:var(--bad)">Reimportar Excel</button>
+    </section>
+
+    <section class="bb-panel" style="margin-bottom:.65rem">
+      <header class="bb-panel-head"><h2>PIN de acceso</h2></header>
+      <div class="bb-panel-body">
+        <p style="font-size:.82rem;color:var(--bb-muted);line-height:1.5;margin-bottom:.5rem">
+          Define <code style="color:var(--bb-amber)">FINANZAS_PIN</code> antes de arrancar para proteger toda la app en red local.
+        </p>
+        <p style="font-size:.78rem">Estado: <strong style="color:{% if pin_enabled() %}var(--bb-green){% else %}var(--bb-muted){% endif %}">{% if pin_enabled() %}activo{% else %}desactivado{% endif %}</strong></p>
       </div>
-    </form>
+    </section>
+
+    <section class="bb-panel" style="margin-bottom:.65rem">
+      <header class="bb-panel-head"><h2>Import GBM automático</h2></header>
+      <div class="bb-panel-body">
+        <p style="font-size:.82rem;color:var(--bb-muted);line-height:1.5">
+          Variable <code style="color:var(--bb-amber)">FINANZAS_GBM_IMPORT_HOURS</code> — horas entre imports del Excel GBM (default 12, 0 = desactivado).
+        </p>
+      </div>
+    </section>
+
+    <section class="bb-panel">
+      <header class="bb-panel-head"><h2>Reimportar Excel de tarjetas</h2></header>
+      <div class="bb-panel-body">
+        <p style="font-size:.82rem;color:var(--bb-red);margin-bottom:.75rem;line-height:1.5">
+          ⚠️ Borra tarjetas, categorías, patrimonio y gastos fijos, y recarga desde <code>Tarjetas.xlsx</code>.
+        </p>
+        <form action="/importar" method="post" class="bb-form-grid" style="grid-template-columns:1fr">
+          <div class="field">
+            <label>Escribe REIMPORTAR para confirmar</label>
+            <input name="confirm" required placeholder="REIMPORTAR" autocomplete="off">
+          </div>
+          <div class="field">
+            <button type="submit" class="btn btn-primary" style="background:var(--bb-red);border-color:var(--bb-red)">Reimportar Excel</button>
+          </div>
+        </form>
+      </div>
+    </section>
   </div>
 </div>
 {% endblock %}

@@ -1,12 +1,17 @@
-const CACHE = 'finanzas-pro-v42';
+const CACHE = 'finanzas-pro-v48';
 const PRECACHE = [
   '/',
   '/static/app.css?v=28',
-  '/static/app.js?v=29',
-  '/static/sw.js?v=42',
-  '/static/charts.js?v=13',
+  '/static/app.js?v=30',
+  '/static/sw.js?v=48',
+  '/static/charts.js?v=18',
   '/static/terminal.css?v=38',
-  '/static/terminal.js?v=39',
+  '/static/terminal.js?v=40',
+  '/static/forge.js?v=7',
+  '/static/forge-layout.js?v=3',
+  '/static/offline-queue.js?v=2',
+  '/static/home.css?v=15',
+  '/static/home.js?v=5',
   '/static/terminal-layout.js?v=38',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
@@ -34,20 +39,15 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/static/')) {
     e.respondWith(
-      caches.match(request).then((cached) => {
-        const network = fetch(request).then((res) => {
+      fetch(request)
+        .then((res) => {
           if (res.ok) {
             const copy = res.clone();
             caches.open(CACHE).then((cache) => cache.put(request, copy));
           }
           return res;
-        });
-        if (cached) {
-          network.catch(() => {});
-          return cached;
-        }
-        return network;
-      })
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }
@@ -58,6 +58,15 @@ self.addEventListener('fetch', (e) => {
         .then((res) => res)
         .catch(() => caches.match('/offline').then((r) => r || caches.match('/')))
     );
-    return;
+  }
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data?.type === 'CHECK_PAYMENTS') {
+    e.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+        list.forEach((c) => c.postMessage({ type: 'CHECK_PAYMENTS' }));
+      })
+    );
   }
 });

@@ -2,7 +2,7 @@
 {% block title %}Terminal BMV — Finanzas{% endblock %}
 {% block page_title %}Terminal de mercados{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/terminal.css?v=38">
+<link rel="stylesheet" href="/static/terminal.css?v={{ static_v.terminal_css }}">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 {% endblock %}
 {% block content %}
@@ -259,16 +259,25 @@
         <table class="bb-port-table" id="bbPortTable">
           <thead>
             <tr>
-              <th>Ticker</th><th>Emisora</th><th class="num">Tít.</th>
-              <th class="num">Costo</th><th class="num">Precio</th><th class="num">Valor</th>
+              <th>Posición</th><th>Emisora</th><th class="num">Peso</th>
+              <th class="num">Tít.</th><th class="num">Costo</th><th class="num">Precio</th><th class="num">Valor</th>
               <th class="num">P&amp;L</th><th class="num">Neto</th>
             </tr>
           </thead>
           <tbody id="bbPortRows">
             {% for h in data.holdings or [] %}
-            <tr data-symbol="{{ h.ticker.replace('BMV:', '') }}">
-              <td>{{ h.ticker.replace('BMV:', '') }}</td>
-              <td>{{ h.name[:24] }}</td>
+            {% set sym = h.ticker.replace('BMV:', '') %}
+            {% set wt = h.weight_pct if h.weight_pct is defined else 0 %}
+            <tr data-symbol="{{ sym }}">
+              <td class="bb-port-ticker">
+                <span class="bb-watch-logo-wrap" data-symbol="{{ sym }}">
+                  <img class="bb-watch-logo" src="/api/terminal/logo/{{ sym }}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
+                  <span class="bb-watch-logo-fb">{{ sym[:2] }}</span>
+                </span>
+                <span class="sym">{{ sym }}</span>
+              </td>
+              <td>{{ h.name[:20] }}</td>
+              <td class="num"><span class="bb-weight-pct">{{ "%.1f"|format(wt) }}%</span><div class="bb-weight-bar"><div class="bb-weight-fill" style="width:{{ wt if wt <= 100 else 100 }}%"></div></div></td>
               <td class="num">{{ h.shares }}</td>
               <td class="num">{{ h.avg_cost | currency }}</td>
               <td class="num">{{ h.market_price | currency }}</td>
@@ -328,11 +337,12 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/terminal.js?v=39"></script>
-<script src="/static/terminal-layout.js?v=38"></script>
+<script src="/static/terminal.js?v={{ static_v.terminal_js }}"></script>
+<script src="/static/terminal-layout.js?v={{ static_v.terminal_layout_js }}"></script>
 <script>
+const _urlSym = new URLSearchParams(location.search).get('symbol');
 const BB_INIT = {
-  symbol: {{ (data.terminal.default_symbol if data.terminal is defined else 'IPC') | tojson }},
+  symbol: _urlSym || {{ (data.terminal.default_symbol if data.terminal is defined else 'IPC') | tojson }},
   catalogCount: {{ (data.terminal.catalog_count if data.terminal is defined else 0) | tojson }},
   holdings: {{ (data.holdings or []) | tojson }},
 };

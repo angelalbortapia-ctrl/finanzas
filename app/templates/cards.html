@@ -2,20 +2,14 @@
 {% from "macros.html" import wallet_card %}
 {% block title %}Tarjetas — Finanzas{% endblock %}
 {% block page_title %}{% endblock %}
-{% block extra_head %}
-<link rel="stylesheet" href="/static/home.css?v=2">
-{% endblock %}
+{% block extra_head %}{% endblock %}
 {% block content %}
 
-<div class="bb-page" id="bbPage">
+<div class="bb-page" id="bbPage" data-fx-page="cards">
   <header class="bb-page-bar">
     <div>
-      <div class="bb-logo">FINANZAS <span>· TARJETAS</span></div>
+      <h1 class="bb-page-title">Tarjetas</h1>
       <p class="bb-page-sub">{{ cards | length }} activas · {{ "%.0f"|format(data.usage_pct) }}% uso global</p>
-    </div>
-    <div class="bb-clock">
-      <div class="bb-market-status closed" id="homeMarketStatus">—</div>
-      <div id="homeClock">— CDMX</div>
     </div>
   </header>
 
@@ -30,53 +24,59 @@
     <div class="bb-page-kpi"><span class="bb-page-kpi-label">Línea total</span><span class="bb-page-kpi-val">{{ data.total_line | currency }}</span></div>
   </div>
 
-  <div class="bb-page-body">
-    <section class="bb-panel">
-      <header class="bb-panel-head"><h2>Tus tarjetas</h2><a href="/simulador" class="bb-home-link">Simulador</a></header>
-      <div class="bb-panel-body-flush">
-        <div class="bb-home-cards">
-          {% for c in cards %}
-          {{ wallet_card(c.name, c.revolving_balance | currency, c.credit_line | currency, c.available | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
-          {% endfor %}
-        </div>
-      </div>
-    </section>
-
-    <section class="bb-panel">
-      <header class="bb-panel-head"><h2>Detalle</h2></header>
-      <div class="bb-panel-body-flush">
-        <table class="bb-tbl">
-          <thead><tr><th>Tarjeta</th><th class="num">Saldo</th><th class="num">Disponible</th><th class="num">Línea</th><th class="num">Uso</th></tr></thead>
-          <tbody>
+  <div class="bb-page-grid fx-layout" data-fx-layout="cols" data-fx-key="sideW" data-fx-var="--fx-side-w" data-fx-default="300" data-fx-min="220" data-fx-max="480">
+    <div class="bb-page-main">
+      <section class="bb-panel">
+        <header class="bb-panel-head"><h2>Tus tarjetas</h2><a href="/simulador" class="bb-home-link">Simulador</a></header>
+        <div class="bb-panel-body-flush">
+          <div class="bb-home-cards">
             {% for c in cards %}
-            <tr class="clickable" onclick="location='/tarjetas/{{ c.id }}'">
-              <td><span class="sym">{{ c.name }}</span></td>
-              <td class="num bad">{{ c.balance | currency }}</td>
-              <td class="num good">{{ c.available | currency }}</td>
-              <td class="num">{{ c.credit_line | currency }}</td>
-              <td class="num"><span class="bb-badge {% if c.usage_pct >= 80 %}bad{% elif c.usage_pct >= 60 %}warn{% else %}good{% endif %}">{{ "%.0f"|format(c.usage_pct) }}%</span></td>
-            </tr>
+            {{ wallet_card(c.name, c.revolving_balance | currency, c.credit_line | currency, c.available | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
             {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
+          </div>
+        </div>
+      </section>
 
-    <section class="bb-panel">
-      <header class="bb-panel-head"><h2>Agregar tarjeta</h2></header>
-      <div class="bb-panel-body">
-        <form action="/tarjetas/nueva" method="post" class="bb-form-grid">
-          <div class="field"><label>Nombre</label><input name="name" required placeholder="Ej. BBVA"></div>
-          <div class="field"><label>Línea de crédito</label><input name="credit_line" type="number" step="0.01" required></div>
-          <div class="field"><label>Titular</label><select name="person_id" required>{% for p in data.persons %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
-          <div class="field" style="align-self:end"><button type="submit" class="btn btn-primary btn-block">Agregar</button></div>
-        </form>
-      </div>
-    </section>
+      <section class="bb-panel">
+        <header class="bb-panel-head"><h2>Detalle</h2></header>
+        <div class="bb-panel-body-flush">
+          <table class="bb-tbl">
+            <thead><tr><th>Tarjeta</th><th class="num">Saldo</th><th class="num">Disponible</th><th class="num">Línea</th><th class="num">Uso</th></tr></thead>
+            <tbody>
+              {% for c in cards %}
+              <tr class="clickable" onclick="location='/tarjetas/{{ c.id }}'">
+                <td><span class="sym">{{ c.name }}</span></td>
+                <td class="num bad">{{ c.balance | currency }}</td>
+                <td class="num good">{{ c.available | currency }}</td>
+                <td class="num">{{ c.credit_line | currency }}</td>
+                <td class="num"><span class="bb-badge {% if c.usage_pct >= 80 %}bad{% elif c.usage_pct >= 60 %}warn{% else %}good{% endif %}">{{ "%.0f"|format(c.usage_pct) }}%</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="fx-resize fx-resize-col" data-fx-dir="-1" title="Ancho barra lateral"></div>
+
+    <aside class="bb-page-side">
+      <section class="bb-panel">
+        <header class="bb-panel-head"><h2>Agregar tarjeta</h2></header>
+        <div class="bb-panel-body">
+          <form action="/tarjetas/nueva" method="post" class="bb-form-grid">
+            <div class="field"><label>Nombre</label><input name="name" required placeholder="Ej. BBVA"></div>
+            <div class="field"><label>Línea de crédito</label><input name="credit_line" type="number" step="0.01" required></div>
+            <div class="field"><label>Titular</label><select name="person_id" required>{% for p in data.persons %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+            <div class="field" style="align-self:end"><button type="submit" class="btn btn-primary btn-block">Agregar</button></div>
+          </form>
+        </div>
+      </section>
+    </aside>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/home.js?v=2"></script>
+<script src="/static/home.js?v={{ static_v.home_js }}"></script>
 {% endblock %}

@@ -10,6 +10,7 @@ import openpyxl
 from app.config import GBM_EXCEL_PATH
 from app.database import get_db, init_db
 from app.history import record_portfolio_snapshot, seed_history_if_empty
+from app.locks import PORTFOLIO_LOCK
 
 
 def _num(value: Any) -> Optional[float]:
@@ -225,14 +226,15 @@ def _save_to_db(data: dict, source: str) -> dict:
 
 
 def import_from_excel(path: Optional[Path] = None) -> dict:
-    init_db()
-    excel_path = path or GBM_EXCEL_PATH
-    if not excel_path.exists():
-        raise FileNotFoundError(f"No se encontró {excel_path}")
-    data = parse_gbm_workbook(excel_path)
-    meta = _save_to_db(data, "excel")
-    data["_import_meta"] = meta
-    return data
+    with PORTFOLIO_LOCK:
+        init_db()
+        excel_path = path or GBM_EXCEL_PATH
+        if not excel_path.exists():
+            raise FileNotFoundError(f"No se encontró {excel_path}")
+        data = parse_gbm_workbook(excel_path)
+        meta = _save_to_db(data, "excel")
+        data["_import_meta"] = meta
+        return data
 
 
 def has_investment_data() -> bool:

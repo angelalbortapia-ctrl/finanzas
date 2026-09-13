@@ -1,10 +1,13 @@
+{% set forge_pages = ('dashboard', 'investments', 'cards', 'patrimony', 'simulator', 'transactions', 'settings') %}
+{% set is_forge = page in forge_pages %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Finanzas{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css?v=28">
+  <link rel="stylesheet" href="/static/app.css?v={{ static_v.app_css }}">
+  {% if is_forge %}<link rel="stylesheet" href="/static/home.css?v={{ static_v.home_css }}">{% endif %}
   {% block extra_head %}{% endblock %}
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icons/icon-192.png" type="image/png">
@@ -14,7 +17,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Finanzas">
 </head>
-<body class="page-{{ page or 'dashboard' }}">
+<body class="page-{{ page or 'dashboard' }}{% if is_forge %} forge-mode{% endif %}">
+  {% if not is_forge %}
   <header class="topbar">
     <a href="/" class="brand">
       <span class="brand-mark">F</span>
@@ -66,6 +70,9 @@
       <div class="page-date" id="today-date"></div>
     </div>
   </header>
+  {% endif %}
+
+  {% if is_forge %}{% include "chrome.html" %}{% endif %}
 
   <main class="shell">
     {% if page not in ('dashboard', 'investments', 'cards', 'patrimony', 'simulator', 'transactions', 'login') %}
@@ -81,6 +88,7 @@
     </div>
   </main>
 
+  {% if not is_forge %}
   <nav class="mob-nav" aria-label="Móvil">
     <a href="/" class="{% if page == 'dashboard' %}active{% endif %}">
       <svg fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M3 10.5L12 4l9 6.5V19a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-8.5z"/></svg>
@@ -107,6 +115,7 @@
       Patr.
     </a>
   </nav>
+  {% endif %}
 
   <div class="pwa-install" id="pwa-install" hidden>
     <div class="pwa-install-text">
@@ -119,9 +128,11 @@
 
   {% if page in ('dashboard', 'patrimony', 'simulator', 'cards') %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="/static/charts.js?v=13"></script>
+  <script src="/static/charts.js?v={{ static_v.charts_js }}"></script>
   {% endif %}
-  <script src="/static/app.js?v=29"></script>
+  <script src="/static/app.js?v={{ static_v.app_js }}"></script>
+  {% if is_forge %}<script src="/static/forge.js?v={{ static_v.forge_js }}"></script>{% endif %}
+  {% if is_forge %}<script src="/static/forge-layout.js?v={{ static_v.forge_layout_js }}"></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

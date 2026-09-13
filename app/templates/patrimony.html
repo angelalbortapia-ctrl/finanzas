@@ -1,9 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Patrimonio — Finanzas{% endblock %}
 {% block page_title %}{% endblock %}
-{% block extra_head %}
-<link rel="stylesheet" href="/static/home.css?v=2">
-{% endblock %}
+{% block extra_head %}{% endblock %}
 {% block content %}
 
 {% if request.query_params.get('closed') %}
@@ -15,19 +13,15 @@
 {% set live = data.live_finances %}
 {% set pm = data.price_meta or {} %}
 
-<div class="bb-page" id="bbPage">
+<div class="bb-page" id="bbPage" data-fx-page="patrimony">
   <header class="bb-page-bar">
     <div>
-      <div class="bb-logo">FINANZAS <span>· PATRIMONIO</span></div>
+      <h1 class="bb-page-title">Patrimonio</h1>
       <p class="bb-page-sub">GBM · {{ pm.source_label or 'snapshot' }} · {{ pm.fetched_age or 'sin actualizar' }}</p>
     </div>
     <div style="text-align:right">
       <div class="bb-page-hero" data-count="{{ data.unified_net }}" data-prefix="$">$0</div>
       <div class="bb-page-hero-meta">Patrimonio neto unificado</div>
-    </div>
-    <div class="bb-clock">
-      <div class="bb-market-status closed" id="homeMarketStatus">—</div>
-      <div id="homeClock">— CDMX</div>
     </div>
   </header>
 
@@ -39,13 +33,24 @@
     <div class="bb-page-kpi"><span class="bb-page-kpi-label">PPR</span><span class="bb-page-kpi-val">{{ live.ppr | currency }}</span></div>
   </div>
 
-  <div class="bb-page-grid">
+  <div class="bb-page-grid fx-layout" data-fx-layout="cols" data-fx-key="sideW" data-fx-var="--fx-side-w" data-fx-default="300" data-fx-min="220" data-fx-max="480">
     <div class="bb-page-main">
       {% if data.patrimony %}
-      <section class="bb-panel">
+      <div class="fx-layout" data-fx-layout="stack" data-fx-key="stackPct" data-fx-var="--fx-stack-pct" data-fx-default="55" data-fx-min="35" data-fx-max="75">
+      <section class="bb-panel" data-fx-layout="panel-h" data-fx-key="patChartH" data-fx-var="--fx-chart-h" data-fx-default="320" data-fx-min="200" data-fx-max="520">
         <header class="bb-panel-head"><h2>Evolución mensual</h2><a href="/patrimonio" class="bb-home-link">Historial</a></header>
-        <div class="bb-panel-body"><div class="chart chart-lg"><canvas id="patChart"></canvas></div></div>
+        <div class="bb-panel-body pat-chart-panel">
+          <div class="pat-chart-meta">
+            <div class="pat-chart-narrative" id="patChartNarrative"></div>
+            <div class="pat-chart-stats pat-chart-stats--full" id="patChartStats"></div>
+            <div class="pat-chart-composition" id="patChartComposition"></div>
+          </div>
+          <div class="chart pat-chart-wrap"><canvas id="patChart"></canvas></div>
+        </div>
+        <div class="fx-resize fx-resize-row" title="Alto gráfica"></div>
       </section>
+
+      <div class="fx-resize fx-resize-row" title="Proporción gráfica / tabla"></div>
 
       <section class="bb-panel">
         <header class="bb-panel-head"><h2>Cierres mensuales</h2></header>
@@ -72,6 +77,7 @@
           </table>
         </div>
       </section>
+      </div>
       {% endif %}
 
       <section class="bb-panel">
@@ -93,6 +99,8 @@
         </div>
       </section>
     </div>
+
+    <div class="fx-resize fx-resize-col" data-fx-dir="-1" title="Ancho barra lateral"></div>
 
     <aside class="bb-page-side">
       <section class="bb-panel">
@@ -117,30 +125,11 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/home.js?v=2"></script>
+<script src="/static/home.js?v={{ static_v.home_js }}"></script>
 {% if data.patrimony %}
 <script>
-const chartGrid = 'rgba(26, 33, 48, 0.6)';
-const chartText = '#6d7788';
 const p = {{ data.patrimony | tojson }};
-initAnimatedChart(document.getElementById('patChart'), () => ({
-  type: 'line',
-  data: {
-    labels: p.map(x => x.label.split(' ')[0]),
-    datasets: [
-      { label: 'Activos', data: p.map(x => x.assets), borderColor: '#d4a853', tension: .35, borderWidth: 2 },
-      { label: 'Deuda TC', data: p.map(x => x.debt), borderColor: '#f87171', tension: .35, borderWidth: 2 },
-      { label: 'Neto', data: p.map(x => x.net_worth), borderColor: '#34d399', tension: .35, borderWidth: 2.5 },
-    ]
-  },
-  options: {
-    ...chartDefaults(),
-    scales: {
-      x: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
-      y: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
-    },
-  },
-}));
+initPatrimonyChart(document.getElementById('patChart'), p, { mode: 'full' });
 </script>
 {% endif %}
 {% endblock %}

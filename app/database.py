@@ -136,6 +136,13 @@ CREATE TABLE IF NOT EXISTS schema_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS transaction_payment_allocations (
+    id INTEGER PRIMARY KEY,
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    category_id INTEGER NOT NULL REFERENCES card_categories(id),
+    amount REAL NOT NULL
+);
 """
 
 
@@ -164,11 +171,14 @@ MIGRATIONS = [
 
 
 def _migrate(conn):
+    import logging
+    log = logging.getLogger(__name__)
     for sql in MIGRATIONS:
         try:
             conn.execute(sql)
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:
+            if "duplicate column" not in str(exc).lower():
+                log.warning("Migration skipped: %s — %s", sql, exc)
     if not conn.execute(
         "SELECT 1 FROM schema_meta WHERE key = 'loan_kind_inferred'"
     ).fetchone():

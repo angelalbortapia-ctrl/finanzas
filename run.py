@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Arrancar Finanzas en http://127.0.0.1:8000"""
 import os
 import socket
 import subprocess
@@ -10,8 +11,7 @@ import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PORT = 8000
-URL = f"http://127.0.0.1:{PORT}"
+PORT = int(os.environ.get("FINANZAS_PORT", "8000"))
 
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
@@ -36,52 +36,64 @@ def port_in_use(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def kill_port(port: int):
+def can_bind(port: int) -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("127.0.0.1", port))
+        return True
+    except OSError:
+        return False
+
+
+def _port_pids(port: int) -> list[str]:
     try:
         result = subprocess.run(
             ["lsof", "-ti", f":{port}"],
             capture_output=True, text=True,
         )
-        pids = result.stdout.strip().split()
-        for pid in pids:
-            if pid:
-                subprocess.run(["kill", "-9", pid], check=False)
+        return [p for p in result.stdout.strip().split() if p]
     except FileNotFoundError:
-        pass
+        return []
 
 
-def kill_stale_servers():
-    for port in range(PORT, PORT + 6):
-        kill_port(port)
-    for pattern in ("uvicorn.*app.main:app", "python3.*run.py"):
-        try:
-            subprocess.run(["pkill", "-f", pattern], check=False)
-        except FileNotFoundError:
-            pass
+def kill_port(port: int, force: bool = False):
+    pids = _port_pids(port)
+    if not pids:
+        return
+    sig = "-9" if force else "-15"
+    for pid in pids:
+        subprocess.run(["kill", sig, pid], check=False)
+    if not force:
+        time.sleep(0.8)
+        if port_in_use(port):
+            kill_port(port, force=True)
 
 
-def wait_port_free(port: int, timeout: float = 3.0):
-    import time
+def wait_port_free(port: int, timeout: float = 4.0) -> bool:
     t0 = time.time()
     while time.time() - t0 < timeout:
-        if not port_in_use(port):
+        if can_bind(port):
             return True
         time.sleep(0.2)
-    return not port_in_use(port)
+    return can_bind(port)
 
 
-def pick_port() -> int:
-    if port_in_use(PORT):
-        print(f"Puerto {PORT} ocupado — cerrando procesos anteriores...")
-        kill_stale_servers()
-        wait_port_free(PORT)
-    if not port_in_use(PORT):
+def prepare_port() -> int:
+    if can_bind(PORT):
         return PORT
-    for p in range(PORT + 1, PORT + 10):
-        if not port_in_use(p):
-            print(f"  (Puerto {PORT} no disponible, usando {p})")
-            return p
-    raise SystemExit(f"No hay puertos libres entre {PORT} y {PORT + 9}.")
+    print(f"Puerto {PORT} ocupado — cerrando instancia anterior de Finanzas...")
+    kill_port(PORT)
+    if wait_port_free(PORT):
+        return PORT
+    print()
+    print("  No se pudo liberar el puerto", PORT)
+    print("  En otra terminal ejecuta:")
+    print(f"    lsof -ti:{PORT} | xargs kill -9")
+    print("  Luego vuelve a correr:")
+    print("    python3 run.py")
+    print()
+    raise SystemExit(1)
 
 
 def open_browser_when_ready(url: str):
@@ -91,23 +103,24 @@ def open_browser_when_ready(url: str):
             try:
                 with urllib.request.urlopen(health, timeout=1) as resp:
                     if resp.status == 200:
-                        webbrowser.open(url)
+                        try:
+                            webbrowser.open(url)
+                        except Exception:
+                            pass
                         return
             except Exception:
                 time.sleep(0.25)
-        print(f"\n  No se pudo abrir el navegador automáticamente.")
-        print(f"  Abre manualmente: {url}\n")
 
     threading.Thread(target=_wait, daemon=True).start()
 
 
-if __name__ == "__main__":
+def main():
     ensure_deps()
     import uvicorn
 
-    port = pick_port()
+    port = prepare_port()
     url = f"http://127.0.0.1:{port}"
-    (ROOT / ".url").write_text(url)
+    (ROOT / ".url").write_text(url + "\n")
 
     print()
     print("  ╔════════════════════════════════════════╗")
@@ -121,3 +134,13 @@ if __name__ == "__main__":
         open_browser_when_ready(url)
 
     uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=False)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n  Detenido.\n")
+    except Exception as exc:
+        print(f"\n  Error al arrancar: {exc}\n", file=sys.stderr)
+        raise SystemExit(1) from exc

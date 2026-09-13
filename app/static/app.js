@@ -79,7 +79,7 @@ function initProWidgets() {
 function initPWA() {
   if (!('serviceWorker' in navigator)) return;
 
-  navigator.serviceWorker.register('/static/sw.js?v=42').catch(() => {});
+  navigator.serviceWorker.register('/static/sw.js?v=48').catch(() => {});
 
   const banner = document.getElementById('pwa-install');
   const btn = document.getElementById('pwa-install-btn');
@@ -149,7 +149,14 @@ function initPaymentNotifications() {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') checkUpcomingPayments(false);
     });
+    navigator.serviceWorker?.ready.then((reg) => {
+      reg.active?.postMessage({ type: 'CHECK_PAYMENTS' });
+    }).catch(() => {});
   }
+
+  navigator.serviceWorker?.addEventListener('message', (e) => {
+    if (e.data?.type === 'CHECK_PAYMENTS') checkUpcomingPayments(false);
+  });
 }
 
 async function checkUpcomingPayments(force) {
@@ -220,6 +227,7 @@ function initGreeting() {
 }
 
 function initCounters() {
+  if (document.body.classList.contains('forge-mode')) return;
   document.querySelectorAll('[data-count]').forEach(el => {
     const target = parseFloat(el.dataset.count);
     if (isNaN(target)) return;
@@ -241,6 +249,7 @@ function initCounters() {
 }
 
 function initProgressBars() {
+  if (document.body.classList.contains('forge-mode')) return;
   document.querySelectorAll('.progress-fill, .wc-bar-fill').forEach(el => {
     const w = el.style.width;
     if (!w) return;

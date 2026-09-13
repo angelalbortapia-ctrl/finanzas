@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -29,6 +31,7 @@ PERIOD_MAP = {
 
 _news_cache: dict[str, Any] = {"at": 0.0, "items": [], "version": 2}
 _quote_cache: dict[str, Any] = {"at": 0.0, "data": {}}
+_cache_lock = threading.Lock()
 NEWS_TTL_SEC = 900
 QUOTE_CACHE_SEC = 20
 
@@ -75,8 +78,10 @@ def _safe_float(val: Any) -> float | None:
     if val is None:
         return None
     try:
+        if hasattr(val, "iloc"):
+            val = val.iloc[0]
         f = float(val)
-        return f if f == f else None
+        return f if math.isfinite(f) else None
     except (TypeError, ValueError):
         return None
 
@@ -245,7 +250,10 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
             ts = idx.to_pydatetime().strftime("%Y-%m-%d %H:%M")
         else:
             ts = idx.to_pydatetime().strftime("%Y-%m-%d")
-        o, h, l, c = float(row["Open"]), float(row["High"]), float(row["Low"]), float(row["Close"])
+        o = _safe_float(row["Open"]) or 0
+        h = _safe_float(row["High"]) or 0
+        l = _safe_float(row["Low"]) or 0
+        c = _safe_float(row["Close"]) or 0
         if c != c:
             continue
         points.append({"t": ts, "o": o, "h": h, "l": l, "c": c})
@@ -297,7 +305,7 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
                     ts = idx.to_pydatetime().strftime("%Y-%m-%d %H:%M")
                 else:
                     ts = idx.to_pydatetime().strftime("%Y-%m-%d")
-                c = float(row["Close"])
+                c = _safe_float(row["Close"]) or 0
                 if c == c:
                     comp_points.append({"t": ts, "c": c})
             if not comp_points or not points or not main_base:
@@ -420,8 +428,9 @@ def get_live_quotes(symbols: list[str]) -> dict[str, dict]:
     if not resolved:
         return {}
 
-    cached = _quote_cache.get("data", {})
-    cache_fresh = now - _quote_cache["at"] < QUOTE_CACHE_SEC
+    with _cache_lock:
+        cached = dict(_quote_cache.get("data", {}))
+        cache_fresh = now - _quote_cache["at"] < QUOTE_CACHE_SEC
     if cache_fresh:
         hits = {k: cached[k] for k in resolved if k in cached}
         if len(hits) == len(resolved):
@@ -472,8 +481,9 @@ def get_live_quotes(symbols: list[str]) -> dict[str, dict]:
         except Exception:
             continue
 
-    _quote_cache["at"] = now
-    _quote_cache["data"] = {**cached, **out}
+    with _cache_lock:
+        _quote_cache["at"] = now
+        _quote_cache["data"] = {**cached, **out}
     merged = {**hits, **out}
     return {sym: merged[sym] for sym in resolved if sym in merged}
 
@@ -757,13 +767,14 @@ def get_market_news(limit: int = 30, symbol: str = "") -> list[dict]:
             return items
 
     now = time.time()
-    cache_ok = (
-        _news_cache["items"]
-        and _news_cache.get("version") == 2
-        and now - _news_cache["at"] < NEWS_TTL_SEC
-    )
-    if cache_ok:
-        return _news_cache["items"][:limit]
+    with _cache_lock:
+        cache_ok = (
+            _news_cache["items"]
+            and _news_cache.get("version") == 2
+            and now - _news_cache["at"] < NEWS_TTL_SEC
+        )
+        if cache_ok:
+            return list(_news_cache["items"][:limit])
 
     articles: list[dict] = []
     seen: set[str] = set()
@@ -775,8 +786,9 @@ def get_market_news(limit: int = 30, symbol: str = "") -> list[dict]:
                 articles.append(a)
 
     articles.sort(key=lambda x: x.get("published_at") or "", reverse=True)
-    _news_cache["at"] = now
-    _news_cache["items"] = articles
+    with _cache_lock:
+        _news_cache["at"] = now
+        _news_cache["items"] = articles
     return articles[:limit]
 
 
@@ -801,6 +813,7 @@ def get_portfolio_live() -> dict:
 
     rows = []
     total_mv = total_inv = total_pnl = total_net = 0.0
+    pre_mv = sum((dict(h).get("market_value") or 0) for h in holdings)
     for h in holdings:
         row = dict(h)
         sym = row["ticker"].replace("BMV:", "")
@@ -809,6 +822,7 @@ def get_portfolio_live() -> dict:
         total_inv += (row.get("avg_cost") or 0) * (row.get("shares") or 0)
         total_pnl += row.get("pnl") or 0
         total_net += row.get("net_pnl") or 0
+        mv = row.get("market_value") or 0
         rows.append({
             "ticker": row["ticker"],
             "symbol": sym,
@@ -816,9 +830,10 @@ def get_portfolio_live() -> dict:
             "shares": row["shares"],
             "avg_cost": row["avg_cost"],
             "market_price": row["market_price"],
-            "market_value": row["market_value"],
+            "market_value": mv,
             "pnl": row["pnl"],
             "net_pnl": row.get("net_pnl", 0),
+            "weight_pct": (mv / pre_mv * 100) if pre_mv else 0,
             "change_pct": 0,
             "price_source": row.get("price_source"),
         })

@@ -3,8 +3,7 @@
 {% block title %}Inicio — Finanzas{% endblock %}
 {% block page_title %}{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/terminal.css?v=38">
-<link rel="stylesheet" href="/static/home.css?v=2">
+<link rel="stylesheet" href="/static/terminal.css?v={{ static_v.terminal_css }}">
 {% endblock %}
 {% block content %}
 
@@ -14,14 +13,9 @@
 {% set hcolor = '#34d399' if data.health.color == 'good' else '#fbbf24' if data.health.color in ('warn','mid') else '#f87171' %}
 {% set next_pay = data.upcoming_payments[0] if data.upcoming_payments else none %}
 
-<div class="bb-home" id="bbHome">
+<div class="bb-home" id="bbHome" data-fx-page="dashboard">
 
-  <header class="bb-home-bar">
-    <div class="bb-home-brand">
-      <div class="bb-logo">FINANZAS <span>· INICIO</span></div>
-      <p class="bb-home-greet"><span id="greeting">Hola</span>, {{ user_name }}</p>
-    </div>
-
+  <section class="bb-home-hero-strip fx-in">
     <div class="bb-home-hero">
       <span class="bb-home-hero-label">Patrimonio neto</span>
       <strong class="bb-home-hero-val" data-count="{{ data.unified_net }}" data-prefix="$">$0</strong>
@@ -31,27 +25,14 @@
       </span>
       {% endif %}
     </div>
-
-    <nav class="bb-home-quick" aria-label="Acciones rápidas">
-      <a href="/tarjetas">Tarjetas</a>
-      <a href="/inversiones">Terminal</a>
-      <a href="/simulador">Simulador</a>
-      <a href="/movimientos" class="bb-home-quick-primary">+ Movimiento</a>
-    </nav>
-
-    <div class="bb-clock">
-      <div class="bb-market-status closed" id="homeMarketStatus">—</div>
-      <div id="homeClock">— CDMX</div>
-    </div>
-  </header>
+  </section>
 
   <div class="bb-ticker bb-home-ticker" id="homeTicker" aria-hidden="true">
     <div class="bb-ticker-track" id="homeTickerTrack"></div>
   </div>
 
-  {% if data.month_close.remind or (next_pay and next_pay.days <= 3) %}
+  {% if data.month_close.remind %}
   <div class="bb-home-alerts">
-    {% if data.month_close.remind %}
     <div class="bb-home-alert warn">
       <span class="bb-home-alert-label">Cierre de mes</span>
       <strong>{{ data.month_close.label }}</strong>
@@ -60,17 +41,6 @@
         <button type="submit" class="btn btn-primary btn-sm">Cerrar mes</button>
       </form>
     </div>
-    {% endif %}
-    {% if next_pay and next_pay.days <= 3 %}
-    <div class="bb-home-alert {{ next_pay.urgency }}">
-      <span class="bb-home-alert-label">Pago próximo</span>
-      <strong>{{ next_pay.name }}</strong>
-      <span class="bb-home-alert-meta">
-        {% if next_pay.days == 0 %}Hoy{% elif next_pay.days == 1 %}Mañana{% else %}En {{ next_pay.days }} días{% endif %}
-        {% if next_pay.amount %} · {{ next_pay.amount | currency }}{% endif %}
-      </span>
-    </div>
-    {% endif %}
   </div>
   {% endif %}
 
@@ -91,7 +61,7 @@
     {% endif %}
     <div class="bb-home-kpi">
       <span class="bb-home-kpi-label">GBM <span class="bb-price-tag">{{ pm.source_label or 'snapshot' }} · {{ pm.fetched_age or 'sin actualizar' }}</span></span>
-      <span class="bb-home-kpi-val accent">{{ data.gbm_live | currency }}</span>
+      <span class="bb-home-kpi-val accent" data-live-kpi="gbm" data-value="{{ data.gbm_live }}">{{ data.gbm_live | currency }}</span>
     </div>
     <div class="bb-home-kpi">
       <span class="bb-home-kpi-label">Disponible</span>
@@ -106,7 +76,7 @@
     </div>
   </div>
 
-  <div class="bb-home-grid">
+  <div class="bb-home-grid fx-layout" data-fx-layout="cols" data-fx-key="sideW" data-fx-var="--fx-side-w" data-fx-default="320" data-fx-min="220" data-fx-max="520">
     <div class="bb-home-main">
 
       <section class="bb-panel">
@@ -126,26 +96,68 @@
         </div>
       </section>
 
-      <div class="bb-home-duo">
-        <section class="bb-panel">
+      {% if data.holdings_top %}
+      <section class="bb-panel">
+        <header class="bb-panel-head">
+          <div>
+            <h2>Portafolio GBM</h2>
+            <p class="bb-panel-desc">{{ pm.source_label or 'snapshot' }} · {{ pm.fetched_age or 'sin actualizar' }}</p>
+          </div>
+          <a href="/inversiones" class="bb-home-link">Terminal</a>
+        </header>
+        <div class="bb-panel-body-flush">
+          <table class="bb-tbl">
+            <thead><tr><th>Posición</th><th>Emisora</th><th class="num">Peso</th><th class="num">Valor</th><th class="num">P&amp;L</th></tr></thead>
+            <tbody>
+              {% for h in data.holdings_top %}
+              <tr class="clickable" data-href="/inversiones?symbol={{ h.symbol | urlencode }}">
+                <td class="bb-port-ticker">
+                  <span class="bb-watch-logo-wrap" data-symbol="{{ h.symbol }}">
+                    <img class="bb-watch-logo" src="/api/terminal/logo/{{ h.symbol }}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
+                    <span class="bb-watch-logo-fb">{{ h.symbol[:2] }}</span>
+                  </span>
+                  <span class="sym">{{ h.symbol }}</span>
+                </td>
+                <td>{{ h.name[:22] }}</td>
+                <td class="num"><span class="bb-weight-pct">{{ "%.1f"|format(h.weight_pct) }}%</span><div class="bb-weight-bar"><div class="bb-weight-fill" style="width:{{ h.weight_pct if h.weight_pct <= 100 else 100 }}%"></div></div></td>
+                <td class="num">{{ h.market_value | currency }}</td>
+                <td class="num {% if h.pnl >= 0 %}good{% else %}bad{% endif %}">{{ h.pnl | currency }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
+
+      <div class="bb-home-duo{% if data.patrimony %} fx-layout{% endif %}"{% if data.patrimony %} data-fx-layout="duo" data-fx-key="duoPct" data-fx-var="--fx-duo-pct" data-fx-default="50" data-fx-min="25" data-fx-max="75"{% endif %}>
+        <section class="bb-panel" data-fx-layout="panel-h" data-fx-key="cardsChartH" data-fx-var="--fx-chart-h" data-fx-default="200" data-fx-min="120" data-fx-max="400">
           <header class="bb-panel-head">
             <h2>Deuda por tarjeta</h2>
           </header>
           <div class="bb-panel-body">
             <div class="chart"><canvas id="cardsChart"></canvas></div>
           </div>
+          <div class="fx-resize fx-resize-row" title="Alto gráfica"></div>
         </section>
         {% if data.patrimony %}
-        <section class="bb-panel">
+        <div class="fx-resize fx-resize-col" title="Proporción gráficas"></div>
+        <section class="bb-panel" data-fx-layout="panel-h" data-fx-key="patChartH" data-fx-var="--fx-chart-h" data-fx-default="300" data-fx-min="200" data-fx-max="480">
           <header class="bb-panel-head">
             <div>
               <h2>Evolución patrimonial</h2>
             </div>
             <a href="/patrimonio" class="bb-home-link">Historial</a>
           </header>
-          <div class="bb-panel-body">
-            <div class="chart"><canvas id="patChart"></canvas></div>
+          <div class="bb-panel-body pat-chart-panel">
+            <div class="pat-chart-meta">
+              <div class="pat-chart-narrative" id="patChartNarrative"></div>
+              <div class="pat-chart-stats" id="patChartStats"></div>
+              <div class="pat-chart-composition" id="patChartComposition"></div>
+            </div>
+            <div class="chart pat-chart-wrap"><canvas id="patChart"></canvas></div>
           </div>
+          <div class="fx-resize fx-resize-row" title="Alto gráfica"></div>
         </section>
         {% endif %}
       </div>
@@ -176,6 +188,8 @@
         </div>
       </details>
     </div>
+
+    <div class="fx-resize fx-resize-col" data-fx-dir="-1" title="Ancho barra lateral"></div>
 
     <aside class="bb-home-side">
 
@@ -289,12 +303,10 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/home.js?v=2"></script>
+<script src="/static/home.js?v={{ static_v.home_js }}"></script>
 <script>
 initProWidgets();
 initSavingsWidget();
-initPaymentNotifications();
-
 const cards = [
   {% for c in data.cards %}
   { name: {{ c.name | tojson }}, revolving_balance: {{ c.revolving_balance }}, usage_pct: {{ c.usage_pct }} }{% if not loop.last %},{% endif %}
@@ -330,31 +342,6 @@ initAnimatedChart(document.getElementById('cardsChart'), () => ({
 }));
 
 const pat = {{ data.patrimony | tojson }};
-if (pat.length && document.getElementById('patChart')) {
-  const ctx = document.getElementById('patChart').getContext('2d');
-  const g = ctx.createLinearGradient(0, 0, 0, 200);
-  g.addColorStop(0, 'rgba(212,168,83,0.2)');
-  g.addColorStop(1, 'rgba(212,168,83,0)');
-  initAnimatedChart(document.getElementById('patChart'), () => ({
-    type: 'line',
-    data: {
-      labels: pat.map(p => p.label.split(' ')[0]),
-      datasets: [{
-        label: 'Patrimonio neto',
-        data: pat.map(p => p.net_worth),
-        borderColor: '#d4a853',
-        backgroundColor: g,
-        fill: true, tension: 0.15, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
-      }]
-    },
-    options: {
-      ...chartDefaults(),
-      scales: {
-        x: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
-        y: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
-      },
-    },
-  }));
-}
+if (pat.length) initPatrimonyChart(document.getElementById('patChart'), pat, { mode: 'compact' });
 </script>
 {% endblock %}

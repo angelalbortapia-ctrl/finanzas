@@ -2,7 +2,6 @@
 {% block title %}Movimientos — Finanzas{% endblock %}
 {% block page_title %}{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="/static/home.css?v=2">
 {% endblock %}
 {% block content %}
 
@@ -18,15 +17,11 @@
 <div class="bb-flash err">No se encontró el movimiento.</div>
 {% endif %}
 
-<div class="bb-page" id="bbPage">
+<div class="bb-page" id="bbPage" data-fx-page="transactions">
   <header class="bb-page-bar">
     <div>
-      <div class="bb-logo">FINANZAS <span>· MOVIMIENTOS</span></div>
+      <h1 class="bb-page-title">Movimientos</h1>
       <p class="bb-page-sub">{{ transactions | length }} registrados</p>
-    </div>
-    <div class="bb-clock">
-      <div class="bb-market-status closed" id="homeMarketStatus">—</div>
-      <div id="homeClock">— CDMX</div>
     </div>
   </header>
 
@@ -36,9 +31,11 @@
     <div class="bb-page-kpi"><span class="bb-page-kpi-label">Último</span><span class="bb-page-kpi-val">{{ transactions[0].date if transactions else '—' }}</span></div>
   </div>
 
-  <div class="bb-page-grid">
+  <div class="bb-flash ok" id="offline-flash" hidden></div>
+
+  <div class="bb-page-grid fx-layout" data-fx-layout="cols" data-fx-key="sideW" data-fx-var="--fx-side-w" data-fx-default="300" data-fx-min="220" data-fx-max="480">
     <div class="bb-page-main">
-      <section class="bb-panel">
+      <section class="bb-panel" id="nuevo">
         <header class="bb-panel-head"><h2>Nuevo movimiento</h2></header>
         <div class="bb-panel-body">
           <p style="font-size:.75rem;color:var(--bb-muted);margin-bottom:.75rem">Los <strong>gastos</strong> suman al saldo. Los <strong>pagos</strong> lo reducen.</p>
@@ -85,6 +82,8 @@
       </section>
     </div>
 
+    <div class="fx-resize fx-resize-col" data-fx-dir="-1" title="Ancho barra lateral"></div>
+
     <aside class="bb-page-side">
       <section class="bb-panel" id="tx-edit-panel" hidden>
         <header class="bb-panel-head"><h2>Editar movimiento</h2></header>
@@ -109,6 +108,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/home.js?v=2"></script>
-<script>initTransactionEditor();</script>
+<script src="/static/home.js?v={{ static_v.home_js }}"></script>
+<script src="/static/offline-queue.js?v={{ static_v.offline_queue_js }}"></script>
 {% endblock %}

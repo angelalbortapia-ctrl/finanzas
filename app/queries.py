@@ -182,6 +182,22 @@ def get_dashboard():
         (_month_start, _today.isoformat()),
     ).fetchone()
     month_payments = pay_row["total"] if pay_row else 0
+
+    holdings_raw = conn.execute(
+        "SELECT * FROM investment_holdings WHERE shares > 0 ORDER BY market_value DESC LIMIT 8"
+    ).fetchall()
+    all_mv_row = conn.execute(
+        "SELECT COALESCE(SUM(market_value), 0) AS t FROM investment_holdings WHERE shares > 0"
+    ).fetchone()
+    all_mv = all_mv_row["t"] if all_mv_row else 0
+    holdings_top = []
+    for h in holdings_raw:
+        row = dict(h)
+        enrich_holding(row)
+        row["symbol"] = row["ticker"].replace("BMV:", "")
+        row["weight_pct"] = ((row.get("market_value") or 0) / all_mv * 100) if all_mv else 0
+        holdings_top.append(row)
+
     conn.close()
 
     close_status = month_close_status()
@@ -225,6 +241,7 @@ def get_dashboard():
         "month_close": close_status,
         "live_finances": live,
         "price_meta": get_price_meta(),
+        "holdings_top": holdings_top,
     }
 
 
@@ -463,7 +480,13 @@ def _normalize_tx_type(type: str) -> str:
     return t
 
 
-def _apply_payment_to_card(conn, card_id: int, amount: float):
+def _clear_payment_allocations(conn, tx_id: int):
+    conn.execute("DELETE FROM transaction_payment_allocations WHERE transaction_id = ?", (tx_id,))
+
+
+def _apply_payment_to_card(conn, card_id: int, amount: float, tx_id: int | None = None):
+    if tx_id:
+        _clear_payment_allocations(conn, tx_id)
     revolving = _card_revolving_total(conn, card_id)
     remaining = min(amount, revolving)
     cats = conn.execute(
@@ -480,17 +503,31 @@ def _apply_payment_to_card(conn, card_id: int, amount: float):
             "UPDATE card_categories SET amount = ? WHERE id = ?",
             (cat["amount"] - deduct, cat["id"]),
         )
+        if tx_id and deduct > 0:
+            conn.execute(
+                """INSERT INTO transaction_payment_allocations (transaction_id, category_id, amount)
+                   VALUES (?, ?, ?)""",
+                (tx_id, cat["id"], deduct),
+            )
         remaining -= deduct
 
 
-def _apply_transaction_to_card(conn, card_id: int, amount: float, category: str, person_id: int | None, type: str):
+def _apply_transaction_to_card(
+    conn,
+    card_id: int,
+    amount: float,
+    category: str,
+    person_id: int | None,
+    type: str,
+    tx_id: int | None = None,
+):
     if not card_id or amount <= 0:
         return
     cat_name = (category or "").strip() or "Gastos varios"
     if type == "expense":
         _add_to_category(conn, card_id, cat_name, amount, person_id)
     elif type == "payment":
-        _apply_payment_to_card(conn, card_id, amount)
+        _apply_payment_to_card(conn, card_id, amount, tx_id)
 
 
 def _reverse_transaction_on_card(conn, tx: dict):
@@ -509,12 +546,41 @@ def _reverse_transaction_on_card(conn, tx: dict):
             new_amt = max(0.0, row["amount"] - amount)
             conn.execute("UPDATE card_categories SET amount = ? WHERE id = ?", (new_amt, row["id"]))
     elif tx["type"] == "payment":
-        _reverse_payment_to_card(conn, card_id, amount, person_id, cat_name)
+        _reverse_payment_to_card(conn, tx)
 
 
-def _reverse_payment_to_card(conn, card_id: int, amount: float, person_id: int | None, cat_name: str):
-    """Restore a deleted/edited payment to revolving spend."""
-    _add_to_category(conn, card_id, "Pagos revertidos", amount, person_id)
+def _reverse_payment_to_card(conn, tx: dict):
+    """Restore a deleted/edited payment to the categories that were reduced."""
+    tx_id = tx.get("id")
+    if tx_id:
+        rows = conn.execute(
+            """SELECT category_id, amount FROM transaction_payment_allocations
+               WHERE transaction_id = ?""",
+            (tx_id,),
+        ).fetchall()
+        if rows:
+            orphan = 0.0
+            for row in rows:
+                cat = conn.execute(
+                    "SELECT amount FROM card_categories WHERE id = ?",
+                    (row["category_id"],),
+                ).fetchone()
+                if cat:
+                    conn.execute(
+                        "UPDATE card_categories SET amount = ? WHERE id = ?",
+                        (float(cat["amount"] or 0) + float(row["amount"]), row["category_id"]),
+                    )
+                else:
+                    orphan += float(row["amount"])
+            if orphan > 0 and tx.get("card_id"):
+                _add_to_category(conn, tx["card_id"], "Gastos varios", orphan, tx.get("person_id"))
+            _clear_payment_allocations(conn, tx_id)
+            return
+    card_id = tx.get("card_id")
+    if not card_id:
+        return
+    cat_name = (tx.get("category") or "").strip() or "Gastos varios"
+    _add_to_category(conn, card_id, cat_name, float(tx["amount"]), tx.get("person_id"))
 
 
 def add_transaction(date: str, amount: float, description: str, category: str, card_id: int | None, person_id: int | None, type: str):
@@ -527,12 +593,13 @@ def add_transaction(date: str, amount: float, description: str, category: str, c
         if amount > revolving + 0.01:
             conn.close()
             raise ValueError(f"El pago excede el saldo revolvente (${revolving:,.2f})")
-    conn.execute(
+    cur = conn.execute(
         """INSERT INTO transactions (date, amount, description, category, card_id, person_id, type)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (date, amount, description, category, card_id, person_id, tx_type),
     )
-    _apply_transaction_to_card(conn, card_id, amount, category, person_id, tx_type)
+    tx_id = cur.lastrowid
+    _apply_transaction_to_card(conn, card_id, amount, category, person_id, tx_type, tx_id)
     conn.commit()
     conn.close()
 
@@ -567,6 +634,7 @@ def update_transaction(
                 old_tx.get("category") or "",
                 old_tx.get("person_id"),
                 old_tx["type"],
+                old_tx["id"],
             )
             conn.commit()
             conn.close()
@@ -578,7 +646,7 @@ def update_transaction(
            WHERE id = ?""",
         (date, amount, description, category, card_id, person_id, tx_type, tx_id),
     )
-    _apply_transaction_to_card(conn, card_id, amount, category, person_id, tx_type)
+    _apply_transaction_to_card(conn, card_id, amount, category, person_id, tx_type, tx_id)
     conn.commit()
     conn.close()
     return True
@@ -675,19 +743,22 @@ def get_investments():
             "title": "Ganancia no realizada",
             "text": f"Plusvalía de ${snapshot_dict['pnl']:,.2f} ({snapshot_dict['return_pct']:.1f}%)",
         })
+    history = get_portfolio_history()
+
+    price_meta = get_price_meta()
+    all_mv = sum((h.get("market_value") or 0) for h in holdings_list)
+    for h in holdings_list:
+        enrich_holding(h)
+        h["symbol"] = h["ticker"].replace("BMV:", "")
+        h["weight_pct"] = ((h.get("market_value") or 0) / all_mv * 100) if all_mv else 0
+        h["price_source_label"] = source_label(h.get("price_source") or "excel")
+
     if holdings_list:
         top = holdings_list[0]
         insights.append({
             "title": "Mayor posición",
-            "text": f"{top['name']} — {(top.get('weight_pct') or 0):.1f}% del portafolio",
+            "text": f"{top['name']} — {top.get('weight_pct', 0):.1f}% del portafolio",
         })
-
-    history = get_portfolio_history()
-
-    price_meta = get_price_meta()
-    for h in holdings_list:
-        enrich_holding(h)
-        h["price_source_label"] = source_label(h.get("price_source") or "excel")
 
     if holdings_list and snapshot_dict:
         net = aggregate_net_totals(holdings_list)

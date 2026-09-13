@@ -279,16 +279,20 @@ def _dominant_source(sources: list[str]) -> str:
 
 def refresh_holdings(force: bool = False) -> dict:
     """Refresh all holding prices and portfolio snapshot."""
-    conn = get_db()
-    try:
-        return _refresh_holdings(conn, force)
-    finally:
-        conn.close()
+    from app.locks import PORTFOLIO_LOCK
+
+    with PORTFOLIO_LOCK:
+        conn = get_db()
+        try:
+            return _refresh_holdings(conn, force)
+        finally:
+            conn.close()
 
 
 def _refresh_holdings(conn, force: bool = False) -> dict:
     holdings = conn.execute(
-        "SELECT id, ticker, name, shares, avg_cost FROM investment_holdings WHERE shares > 0"
+        """SELECT id, ticker, name, shares, avg_cost, market_value, price_source
+           FROM investment_holdings WHERE shares > 0"""
     ).fetchall()
     if not holdings:
         return {"updated": 0, "message": "Sin posiciones", "source": None}
@@ -302,23 +306,29 @@ def _refresh_holdings(conn, force: bool = False) -> dict:
     total_invested = 0.0
     sources_used: list[str] = []
     latest_fetch = None
+    mv_by_id: dict[int, float] = {}
 
     for h in holdings:
         q = quotes.get(h["ticker"])
         cost_basis = h["avg_cost"] * h["shares"]
         total_invested += cost_basis
 
+        if h["price_source"] == "manual":
+            mv = float(h["market_value"] or 0)
+            total_market += mv
+            mv_by_id[h["id"]] = mv
+            continue
+
         if not q:
-            row = conn.execute(
-                "SELECT market_value FROM investment_holdings WHERE id = ?", (h["id"],)
-            ).fetchone()
-            if row:
-                total_market += row["market_value"] or 0
+            mv = float(h["market_value"] or 0)
+            total_market += mv
+            mv_by_id[h["id"]] = mv
             continue
 
         market_value = q.price * h["shares"]
         pnl = market_value - cost_basis
         total_market += market_value
+        mv_by_id[h["id"]] = market_value
         updated += 1
         sources_used.append(q.source)
         if not latest_fetch or q.fetched_at > latest_fetch:
@@ -341,11 +351,9 @@ def _refresh_holdings(conn, force: bool = False) -> dict:
 
     if total_market > 0:
         for h in holdings:
-            row = conn.execute(
-                "SELECT market_value FROM investment_holdings WHERE id = ?", (h["id"],)
-            ).fetchone()
-            if row and row["market_value"]:
-                weight = row["market_value"] / total_market * 100
+            mv = mv_by_id.get(h["id"])
+            if mv:
+                weight = mv / total_market * 100
                 conn.execute(
                     "UPDATE investment_holdings SET weight_pct = ? WHERE id = ?",
                     (weight, h["id"]),

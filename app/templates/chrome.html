@@ -1,0 +1,55 @@
+{% set nw = latest_net_worth() %}
+<header class="bb-chrome" id="bbChrome">
+  <a href="/" class="bb-chrome-brand" title="Inicio">
+    <span class="bb-chrome-mark">F</span>
+    <span class="bb-chrome-name">FINANZAS</span>
+  </a>
+  <nav class="bb-chrome-nav" aria-label="Principal">
+    <a href="/" class="bb-chrome-tab {% if page == 'dashboard' %}active{% endif %}">Inicio</a>
+    <a href="/tarjetas" class="bb-chrome-tab {% if page == 'cards' %}active{% endif %}">Tarjetas</a>
+    <a href="/inversiones" class="bb-chrome-tab {% if page == 'investments' %}active{% endif %}">GBM</a>
+    <a href="/patrimonio" class="bb-chrome-tab {% if page == 'patrimony' %}active{% endif %}">Patrimonio</a>
+    <a href="/simulador" class="bb-chrome-tab {% if page == 'simulator' %}active{% endif %}">Simulador</a>
+    <a href="/movimientos" class="bb-chrome-tab {% if page == 'transactions' %}active{% endif %}">Mov.</a>
+  </nav>
+  <div class="bb-chrome-layout" id="bbChromeLayout" hidden>
+    <button type="button" class="bb-layout-btn" id="bbForgeLayoutBtn" title="Arrastra los bordes para cambiar tamaños">⊞ Ajustar</button>
+    <button type="button" class="bb-layout-reset" id="bbForgeLayoutReset" hidden title="Restaurar tamaños">Reset</button>
+  </div>
+  <button type="button" class="bb-chrome-search" id="bbPaletteBtn" title="Buscar — tecla /">
+    <kbd>/</kbd>
+  </button>
+  <div class="bb-chrome-end">
+    {% if page == 'dashboard' %}
+    <span class="bb-chrome-greet"><span id="greeting">Hola</span>, {{ user_name }}</span>
+    {% elif nw and page != 'dashboard' %}
+    <span class="bb-chrome-net" id="bbChromeNet" title="Patrimonio neto">{{ nw | currency }}</span>
+    {% endif %}
+    <button type="button" class="bb-chrome-icon bb-chrome-theme" id="bbThemeBtn" title="Cambiar tema" aria-label="Cambiar tema">◐</button>
+    <a href="/exportar/mensual.pdf" class="bb-chrome-icon" title="PDF">PDF</a>
+    <a href="/configuracion" class="bb-chrome-icon {% if page == 'settings' %}active{% endif %}" title="Configuración">⚙</a>
+    <div class="bb-clock bb-chrome-clock">
+      <div class="bb-market-status closed" id="chromeMarketStatus">—</div>
+      <div id="chromeClock">— CDMX</div>
+    </div>
+  </div>
+</header>
+
+<div class="bb-palette" id="bbPalette" hidden aria-hidden="true">
+  <div class="bb-palette-backdrop" id="bbPaletteBackdrop"></div>
+  <div class="bb-palette-panel" role="dialog" aria-label="Buscar">
+    <input type="text" class="bb-palette-input" id="bbPaletteInput" placeholder="Ir a… · ticker · acción" autocomplete="off" spellcheck="false">
+    <div class="bb-palette-results" id="bbPaletteResults"></div>
+    <div class="bb-palette-hint">↑↓ navegar · Enter abrir · Esc cerrar</div>
+  </div>
+</div>
+
+<footer class="bb-statusbar" id="bbStatusbar" aria-live="polite">
+  <span class="bb-status-item" id="bbStatusMarket">Mercado: —</span>
+  <span class="bb-status-sep">|</span>
+  <span class="bb-status-item" id="bbStatusPrices">GBM: —</span>
+  <span class="bb-status-sep">|</span>
+  <span class="bb-status-item" id="bbStatusNet">Neto: —</span>
+  <span class="bb-status-sep">|</span>
+  <span class="bb-status-item bb-status-muted" id="bbStatusHints">⊞ Ajustar layout · / buscar · N movimiento</span>
+</footer>

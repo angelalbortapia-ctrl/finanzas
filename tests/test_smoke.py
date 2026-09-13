@@ -20,7 +20,7 @@ from app.queries import (
 )
 from app.simulator import simulate_payoff
 from app.bmv_board import get_board_quotes
-from app.auth import check_pin, pin_enabled
+from app.auth import check_pin, make_session_token, pin_enabled, safe_next, verify_session_token
 from app.logos import LOGO_OVERRIDES, enqueue_logo_resolve, get_logo_fast, get_symbol_logo, is_safe_logo_url
 from app.market import get_price_meta
 from app.terminal import (
@@ -124,6 +124,36 @@ class SmokeTests(unittest.TestCase):
         self.assertTrue(rows)
         self.assertEqual(rows[-1]["price"], 123.45)
 
+    def test_payment_reversal_restores_categories(self):
+        from app.queries import _apply_payment_to_card, _card_revolving_total, _reverse_payment_to_card
+
+        conn = get_db()
+        conn.execute("DELETE FROM card_categories")
+        conn.execute("DELETE FROM credit_cards")
+        conn.execute("DELETE FROM persons")
+        conn.execute("INSERT INTO persons (id, name) VALUES (1, 'Test')")
+        conn.execute(
+            "INSERT INTO credit_cards (id, name, credit_line, person_id) VALUES (1, 'TC', 50000, 1)"
+        )
+        conn.execute(
+            "INSERT INTO card_categories (id, card_id, name, amount, kind) VALUES (1, 1, 'Gastos', 1000, 'spend')"
+        )
+        conn.execute(
+            "INSERT INTO card_categories (id, card_id, name, amount, kind) VALUES (2, 1, 'Compras', 500, 'spend')"
+        )
+        conn.execute(
+            "INSERT INTO transactions (id, date, amount, description, category, card_id, type) "
+            "VALUES (99, '2026-01-01', 600, 'pago', 'Pagos', 1, 'payment')"
+        )
+        conn.commit()
+        _apply_payment_to_card(conn, 1, 600, 99)
+        conn.commit()
+        self.assertAlmostEqual(_card_revolving_total(conn, 1), 900.0)
+        _reverse_payment_to_card(conn, {"id": 99, "card_id": 1, "amount": 600, "type": "payment"})
+        conn.commit()
+        self.assertAlmostEqual(_card_revolving_total(conn, 1), 1500.0)
+        conn.close()
+
     def test_payment_skips_loan_categories(self):
         conn = get_db()
         conn.execute("DELETE FROM card_categories")
@@ -190,6 +220,42 @@ class SmokeTests(unittest.TestCase):
 
     def test_pin_disabled_by_default(self):
         self.assertFalse(pin_enabled())
+
+    def test_api_requires_pin_when_enabled(self):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        import app.auth as auth
+
+        orig = auth.FINANZAS_PIN
+        try:
+            auth.FINANZAS_PIN = "1234"
+            for path in ("/api/status", "/exportar/portafolio.csv"):
+                request = MagicMock()
+                request.url.path = path
+                request.cookies = {}
+                call_next = AsyncMock()
+                response = asyncio.run(auth.pin_middleware(request, call_next))
+                self.assertEqual(response.status_code, 401)
+                call_next.assert_not_called()
+        finally:
+            auth.FINANZAS_PIN = orig
+
+    def test_safe_next_blocks_open_redirect(self):
+        self.assertEqual(safe_next("//evil.com"), "/")
+        self.assertEqual(safe_next("/tarjetas"), "/tarjetas")
+        self.assertEqual(safe_next(""), "/")
+
+    def test_session_token_roundtrip(self):
+        import app.auth as auth
+        orig = auth.FINANZAS_PIN
+        try:
+            auth.FINANZAS_PIN = "1234"
+            token = make_session_token()
+            self.assertTrue(verify_session_token(token))
+            self.assertFalse(verify_session_token("bad.token"))
+        finally:
+            auth.FINANZAS_PIN = orig
         self.assertFalse(check_pin("1234"))
 
     def test_get_price_meta_shape(self):
@@ -208,6 +274,30 @@ class SmokeTests(unittest.TestCase):
         enqueue_logo_resolve("ZZZZTEST")
         fast = get_logo_fast("ZZZZTEST")
         self.assertIsNone(fast.get("url"))
+
+    def test_api_status_payload(self):
+        from app.market import get_price_meta
+        from app.queries import get_latest_net_worth
+        from app.terminal import get_market_status
+
+        payload = {
+            "net_worth": get_latest_net_worth(),
+            "price_meta": get_price_meta(),
+            "market": get_market_status(),
+        }
+        self.assertIn("net_worth", payload)
+        self.assertIn("source_label", payload["price_meta"])
+        self.assertIn("status", payload["market"])
+
+    def test_investments_symbol_override(self):
+        from app.catalog import get_symbol_meta
+        from app.queries import get_investments
+
+        data = get_investments()
+        sym = "GFNORTEO"
+        if get_symbol_meta(sym) and data.get("terminal"):
+            data["terminal"] = {**data["terminal"], "default_symbol": sym}
+            self.assertEqual(data["terminal"]["default_symbol"], sym)
 
     def test_save_to_db_tracks_removed(self):
         conn = get_db()

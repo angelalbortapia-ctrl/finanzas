@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import date
@@ -14,11 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.auth import COOKIE_NAME, check_pin, pin_enabled, pin_middleware
-from app.config import FINANZAS_PIN, USER_NAME
+from app.blocking import run_blocking
+from app.config import GBM_AUTO_IMPORT_HOURS, STATIC_V, USER_NAME
 from app.database import get_db, init_db
 from app.gbm import has_investment_data, import_from_excel as import_gbm_excel
 from app.google_sync import get_google_status, log_sync_error, sync_from_google
-from app.market import format_price_age, get_price_history, refresh_prices, source_label
+from app.market import format_price_age, get_price_meta, get_price_history, refresh_prices, source_label
 from app.finances import close_month, set_payment_goal, set_savings_goal
 from app.queries import (
     MONTH_NAMES,
@@ -67,6 +69,22 @@ BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+async def _gbm_auto_import_loop():
+    if GBM_AUTO_IMPORT_HOURS <= 0:
+        return
+    interval = GBM_AUTO_IMPORT_HOURS * 3600
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await run_blocking(import_gbm_excel)
+            logger.info("GBM auto-import completed")
+        except FileNotFoundError:
+            logger.warning("GBM Excel not found for auto-import")
+        except Exception as exc:
+            logger.exception("GBM auto-import failed")
+            log_sync_error("excel", str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -80,10 +98,16 @@ async def lifespan(app: FastAPI):
             pass
     if not has_investment_data():
         try:
-            import_gbm_excel()
+            await run_blocking(import_gbm_excel)
         except FileNotFoundError:
             pass
+    gbm_task = asyncio.create_task(_gbm_auto_import_loop())
     yield
+    gbm_task.cancel()
+    try:
+        await gbm_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(title="Finanzas", lifespan=lifespan)
@@ -104,6 +128,7 @@ templates.env.globals["current_month"] = date.today().month
 templates.env.globals["source_label"] = source_label
 templates.env.globals["format_price_age"] = format_price_age
 templates.env.globals["pin_enabled"] = pin_enabled
+templates.env.globals["static_v"] = STATIC_V
 
 
 def _ctx(request: Request, page: str, **extra):
@@ -113,6 +138,16 @@ def _ctx(request: Request, page: str, **extra):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/status")
+async def api_status():
+    market = await run_blocking(get_market_status)
+    return {
+        "net_worth": get_latest_net_worth(),
+        "price_meta": get_price_meta(),
+        "market": market,
+    }
 
 
 @app.get("/offline", response_class=HTMLResponse)
@@ -154,6 +189,16 @@ class SavingsGoalBody(BaseModel):
     amount: float
 
 
+class TransactionBody(BaseModel):
+    date: str
+    amount: float
+    description: str = ""
+    category: str = ""
+    card_id: Optional[int] = None
+    person_id: Optional[int] = None
+    type: str = "expense"
+
+
 @app.get("/api/pagos-proximos")
 async def upcoming_payments_api():
     return get_upcoming_payments()
@@ -161,33 +206,33 @@ async def upcoming_payments_api():
 
 @app.get("/api/bolsa-ticker")
 async def bolsa_ticker_api():
-    return get_board_quotes()
+    return await run_blocking(get_board_quotes)
 
 
 @app.get("/api/terminal/indices")
 async def terminal_indices_api():
-    return get_indices_quotes()
+    return await run_blocking(get_indices_quotes)
 
 
 @app.get("/api/terminal/fx-board")
 async def terminal_fx_board_api():
-    return get_fx_quotes()
+    return await run_blocking(get_fx_quotes)
 
 
 @app.get("/api/terminal/chart")
 async def terminal_chart_api(symbol: str = "IPC", period: str = "6mo", compare: str = ""):
-    return get_chart_data(symbol, period, compare=compare)
+    return await run_blocking(get_chart_data, symbol, period, compare)
 
 
 @app.get("/api/terminal/news")
 async def terminal_news_api(limit: int = 30, symbol: str = ""):
-    items = get_market_news(limit, symbol=symbol)
+    items = await run_blocking(lambda: get_market_news(limit, symbol=symbol))
     return {"items": items, "count": len(items)}
 
 
 @app.get("/api/terminal/quote")
 async def terminal_quote_api(symbol: str = "IPC"):
-    return get_quote_detail(symbol)
+    return await run_blocking(get_quote_detail, symbol)
 
 
 @app.get("/api/terminal/catalog")
@@ -201,17 +246,20 @@ async def terminal_catalog_api(q: str = "", board: str = "all", limit: int = 50)
 
 @app.get("/api/terminal/fx")
 async def terminal_fx_api():
-    return {"items": get_fx_panel(), "fetched_at": get_market_status()["time_mx"]}
+    items = await run_blocking(get_fx_panel)
+    market = await run_blocking(get_market_status)
+    return {"items": items, "fetched_at": market["time_mx"]}
 
 
 @app.get("/api/terminal/calendar")
 async def terminal_calendar_api(limit: int = 12):
-    return {"items": get_economic_calendar(limit)}
+    items = await run_blocking(get_economic_calendar, limit)
+    return {"items": items}
 
 
 @app.get("/api/terminal/market")
 async def terminal_market_api():
-    return get_market_status()
+    return await run_blocking(get_market_status)
 
 
 @app.get("/api/terminal/live")
@@ -219,12 +267,14 @@ async def terminal_live_api(symbols: str = ""):
     syms = [s.strip() for s in symbols.split(",") if s.strip()]
     if not syms:
         return {"quotes": {}}
-    return {"quotes": get_live_quotes(syms), "fetched_at": get_market_status()["time_mx"]}
+    quotes = await run_blocking(get_live_quotes, syms)
+    market = await run_blocking(get_market_status)
+    return {"quotes": quotes, "fetched_at": market["time_mx"]}
 
 
 @app.get("/api/terminal/portfolio")
 async def terminal_portfolio_api():
-    return get_portfolio_live()
+    return await run_blocking(get_portfolio_live)
 
 
 @app.get("/api/terminal/logo/{symbol}")
@@ -317,7 +367,9 @@ async def widgets_api():
     next_pay = dash["upcoming_payments"][0] if dash["upcoming_payments"] else None
     return {
         "net_worth": dash["unified_net"],
-        "debt": dash["total_balance"],
+        "debt": dash["total_revolving"],
+        "revolving_debt": dash["total_revolving"],
+        "total_balance": dash["total_balance"],
         "gbm": dash["gbm_live"],
         "health_score": dash["health"]["score"],
         "month_payments": data["month_payments"],
@@ -334,20 +386,31 @@ async def widgets_api():
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, next: str = "/"):
+    from app.auth import safe_next
+
+    dest = safe_next(next)
     if not pin_enabled():
-        return RedirectResponse(next or "/", status_code=303)
-    return templates.TemplateResponse("login.html", _ctx(request, "login", next=next))
+        return RedirectResponse(dest, status_code=303)
+    return templates.TemplateResponse("login.html", _ctx(request, "login", next=dest))
 
 
 @app.post("/login")
 async def login_submit(request: Request, pin: str = Form(...), next: str = Form("/")):
+    from app.auth import make_session_token, safe_next
+
+    dest = safe_next(next)
     if not pin_enabled():
-        return RedirectResponse(next or "/", status_code=303)
+        return RedirectResponse(dest, status_code=303)
     if not check_pin(pin.strip()):
-        return RedirectResponse(f"/login?error=1&next={quote(next)}", status_code=303)
-    dest = next if next.startswith("/") else "/"
+        return RedirectResponse(f"/login?error=1&next={quote(dest)}", status_code=303)
     response = RedirectResponse(dest, status_code=303)
-    response.set_cookie(COOKIE_NAME, FINANZAS_PIN, httponly=True, samesite="lax", max_age=86400 * 30)
+    response.set_cookie(
+        COOKIE_NAME,
+        make_session_token(),
+        httponly=True,
+        samesite="lax",
+        max_age=86400 * 30,
+    )
     return response
 
 
@@ -459,6 +522,23 @@ async def transactions_page(request: Request):
     ))
 
 
+@app.post("/api/movimientos")
+async def api_add_transaction(body: TransactionBody):
+    try:
+        add_transaction(
+            body.date,
+            body.amount,
+            body.description,
+            body.category,
+            body.card_id,
+            body.person_id,
+            body.type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
 @app.post("/movimientos")
 async def add_transaction_route(
     date: str = Form(...),
@@ -544,9 +624,15 @@ async def add_fixed_expense_route(
 
 @app.get("/inversiones", response_class=HTMLResponse)
 async def investments_page(request: Request):
+    from app.catalog import get_symbol_meta
+
+    data = get_investments()
+    sym = (request.query_params.get("symbol") or "").strip().upper().replace("BMV:", "")
+    if sym and get_symbol_meta(sym) and data.get("terminal"):
+        data["terminal"] = {**data["terminal"], "default_symbol": sym}
     return templates.TemplateResponse("inversiones.html", _ctx(
         request, "investments",
-        data=get_investments(),
+        data=data,
         google=get_google_status(),
     ))
 
@@ -554,7 +640,7 @@ async def investments_page(request: Request):
 @app.post("/inversiones/importar")
 async def import_gbm_route():
     try:
-        data = import_gbm_excel()
+        data = await run_blocking(import_gbm_excel)
     except FileNotFoundError as exc:
         log_sync_error("excel", str(exc))
         return RedirectResponse(
@@ -591,7 +677,7 @@ async def sync_google_route():
 @app.post("/inversiones/refresh")
 async def refresh_prices_route(force: str = Form("")):
     try:
-        refresh_prices(force=force == "1")
+        await run_blocking(refresh_prices, force=force == "1")
     except Exception as exc:
         log_sync_error("market", str(exc))
         return RedirectResponse("/inversiones?error=prices", status_code=303)

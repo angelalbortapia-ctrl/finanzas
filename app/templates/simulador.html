@@ -1,15 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Simulador — Finanzas{% endblock %}
 {% block page_title %}{% endblock %}
-{% block extra_head %}
-<link rel="stylesheet" href="/static/home.css?v=2">
-{% endblock %}
+{% block extra_head %}{% endblock %}
 {% block content %}
 
-<div class="bb-page" id="bbPage">
+<div class="bb-page" id="bbPage" data-fx-page="simulator">
   <header class="bb-page-bar">
     <div>
-      <div class="bb-logo">FINANZAS <span>· SIMULADOR</span></div>
+      <h1 class="bb-page-title">Simulador</h1>
       <p class="bb-page-sub">{{ cards | length }} tarjetas · plan de liquidación</p>
     </div>
     <div style="text-align:right">
@@ -18,7 +16,7 @@
     </div>
   </header>
 
-  <div class="bb-page-grid">
+  <div class="bb-page-grid fx-layout" data-fx-layout="cols" data-fx-key="sideW" data-fx-var="--fx-side-w" data-fx-default="280" data-fx-min="200" data-fx-max="440">
     <div class="bb-page-main">
       <section class="bb-panel">
         <header class="bb-panel-head"><h2>Configurar simulación</h2></header>
@@ -44,9 +42,10 @@
       </section>
 
       {% if result and not result.get('error') and result.schedule %}
-      <section class="bb-panel">
+      <section class="bb-panel" data-fx-layout="panel-h" data-fx-key="simChartH" data-fx-var="--fx-chart-h" data-fx-default="220" data-fx-min="140" data-fx-max="420">
         <header class="bb-panel-head"><h2>Proyección · {{ result.schedule_full_len }} meses</h2></header>
         <div class="bb-panel-body"><div class="chart"><canvas id="simChart"></canvas></div></div>
+        <div class="fx-resize fx-resize-row" title="Alto gráfica"></div>
         <div class="bb-panel-body-flush">
           <table class="bb-tbl">
             <thead><tr><th>Mes</th><th class="num">Pago</th><th class="num">Interés</th><th class="num">Restante</th></tr></thead>
@@ -67,6 +66,8 @@
       <div class="bb-flash err">{{ result.error }}</div>
       {% endif %}
     </div>
+
+    <div class="fx-resize fx-resize-col" data-fx-dir="-1" title="Ancho barra lateral"></div>
 
     <aside class="bb-page-side">
       <section class="bb-panel">

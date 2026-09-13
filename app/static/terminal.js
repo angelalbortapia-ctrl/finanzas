@@ -1396,17 +1396,23 @@ function updatePortfolio(port) {
     return;
   }
   const prevPrices = BB.lastPortPrices || {};
-  tbody.innerHTML = port.holdings.map(h => `
-    <tr data-symbol="${escHtml(h.symbol)}">
-      <td>${escHtml(h.symbol)}</td>
-      <td>${escHtml((h.name || '').slice(0, 24))}</td>
+  const logoFn = (window.Forge && window.Forge.logoHtml) || logoHtml;
+  const weightFn = (window.Forge && window.Forge.weightBar) || (() => '');
+  tbody.innerHTML = port.holdings.map(h => {
+    const sym = h.symbol || (h.ticker || '').replace('BMV:', '');
+    const wt = h.weight_pct ?? 0;
+    return `<tr data-symbol="${escHtml(sym)}">
+      <td class="bb-port-ticker">${logoFn(sym)}<span class="sym">${escHtml(sym)}</span></td>
+      <td>${escHtml((h.name || '').slice(0, 20))}</td>
+      <td class="num"><span class="bb-weight-pct">${wt.toFixed(1)}%</span>${weightFn(wt)}</td>
       <td class="num">${h.shares}</td>
       <td class="num">${bbFmt(h.avg_cost)}</td>
       <td class="num">${bbFmt(h.market_price)}</td>
       <td class="num">${bbFmt(h.market_value)}</td>
       <td class="num ${h.pnl >= 0 ? 'up' : 'down'}">${bbFmt(h.pnl)}</td>
       <td class="num ${h.net_pnl >= 0 ? 'up' : 'down'}">${bbFmt(h.net_pnl)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   tbody.querySelectorAll('tr').forEach(row => {
     const sym = row.dataset.symbol;
     const price = port.holdings.find(h => h.symbol === sym)?.market_price;
