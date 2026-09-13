@@ -69,15 +69,7 @@
   </header>
 
   <main class="shell">
-    {% if page == 'dashboard' %}
-    <header class="dash-head reveal">
-      <div>
-        <p class="dash-head-eyebrow"><span id="greeting">Hola</span>, {{ user_name }}</p>
-        <h1 class="dash-head-title">Centro de control</h1>
-      </div>
-      <div class="page-date dash-head-date" id="today-date-dash"></div>
-    </header>
-    {% elif page != 'investments' %}
+    {% if page != 'dashboard' and page != 'investments' %}
     <header class="page-head">
       <div>
         <div class="page-greet"><span id="greeting">Hola</span>, <strong>{{ user_name }}</strong></div>

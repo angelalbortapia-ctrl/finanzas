@@ -2,6 +2,10 @@
 {% from "macros.html" import wallet_card %}
 {% block title %}Inicio — Finanzas{% endblock %}
 {% block page_title %}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/terminal.css?v=38">
+<link rel="stylesheet" href="/static/home.css?v=1">
+{% endblock %}
 {% block content %}
 
 {% set inv = data.investment_snapshot %}
@@ -9,280 +13,282 @@
 {% set hcolor = '#34d399' if data.health.color == 'good' else '#fbbf24' if data.health.color in ('warn','mid') else '#f87171' %}
 {% set next_pay = data.upcoming_payments[0] if data.upcoming_payments else none %}
 
-<!-- Rail de métricas -->
-<section class="metric-rail reveal" aria-label="Resumen financiero">
-  <div class="metric-cell metric-cell-hero">
-    <span class="metric-label">Patrimonio neto</span>
-    <strong class="metric-value metric-value-xl" data-count="{{ data.unified_net }}" data-prefix="$">$0</strong>
-    {% if data.net_change is not none %}
-    <span class="metric-delta {% if data.net_change >= 0 %}up{% else %}down{% endif %}">
-      {% if data.net_change >= 0 %}+{% else %}−{% endif %}{{ data.net_change | currency }} vs mes anterior
-    </span>
-    {% endif %}
-  </div>
-  <div class="metric-cell">
-    <span class="metric-label">Activos</span>
-    <strong class="metric-value">{{ data.total_assets | currency }}</strong>
-  </div>
-  <div class="metric-cell">
-    <span class="metric-label">Deuda revolvente</span>
-    <strong class="metric-value bad">{{ data.total_revolving | currency }}</strong>
-  </div>
-  {% if data.total_loan > 0 %}
-  <div class="metric-cell">
-    <span class="metric-label">Préstamos</span>
-    <strong class="metric-value">{{ data.total_loan | currency }}</strong>
-  </div>
-  {% endif %}
-  <div class="metric-cell">
-    <span class="metric-label">GBM</span>
-    <strong class="metric-value">{{ data.gbm_live | currency }}</strong>
-  </div>
-  <div class="metric-cell">
-    <span class="metric-label">Disponible</span>
-    <strong class="metric-value good">{{ data.total_available | currency }}</strong>
-  </div>
-  <div class="metric-cell metric-cell-score">
-    <span class="metric-label">Salud crediticia</span>
-    <div class="score-inline" style="--score: {{ data.health.score }}; --ring-color: {{ hcolor }}">
-      <span class="score-num">{{ data.health.score }}</span>
-      <span class="score-tag">{{ data.health.label }}</span>
+<div class="bb-home" id="bbHome">
+
+  <header class="bb-home-bar">
+    <div class="bb-home-brand">
+      <div class="bb-logo">FINANZAS <span>· INICIO</span></div>
+      <p class="bb-home-greet"><span id="greeting">Hola</span>, {{ user_name }}</p>
     </div>
-  </div>
-</section>
 
-{% if data.month_close.remind %}
-<div class="alert-strip warn reveal">
-  <span class="alert-strip-label">Cierre de mes</span>
-  <strong>{{ data.month_close.label }}</strong>
-  <span class="alert-strip-meta">Sin snapshot · {{ data.month_close.days_left }} día(s) restantes</span>
-  <form action="/patrimonio/cerrar" method="post" class="inline-form" style="margin-left:auto">
-    <button type="submit" class="btn btn-primary btn-sm">Cerrar mes</button>
-  </form>
-</div>
-{% endif %}
-
-{% if next_pay and next_pay.days <= 3 %}
-<div class="alert-strip {{ next_pay.urgency }} reveal">
-  <span class="alert-strip-label">Pago próximo</span>
-  <strong>{{ next_pay.name }}</strong>
-  <span class="alert-strip-meta">
-    {% if next_pay.days == 0 %}Hoy{% elif next_pay.days == 1 %}Mañana{% else %}En {{ next_pay.days }} días{% endif %}
-    {% if next_pay.amount %} · {{ next_pay.amount | currency }}{% endif %}
-  </span>
-</div>
-{% endif %}
-
-<!-- Acciones rápidas -->
-<nav class="action-bar reveal" aria-label="Acciones">
-  <a href="/tarjetas" class="action-chip">
-    <span class="action-chip-kicker">Tarjetas</span>
-    <span class="action-chip-val">{{ "%.0f"|format(data.usage_pct) }}% uso · {{ data.cards | length }} activas</span>
-  </a>
-  <a href="/inversiones" class="action-chip">
-    <span class="action-chip-kicker">Portafolio</span>
-    <span class="action-chip-val">{{ data.gbm_live | currency }}{% if inv %} · P&amp;L {{ gbm_pnl | currency }}{% endif %}</span>
-  </a>
-  <a href="/simulador" class="action-chip">
-    <span class="action-chip-kicker">Simulador</span>
-    <span class="action-chip-val">Plan de liquidación</span>
-  </a>
-  <a href="/movimientos" class="action-chip action-chip-primary">
-    <span class="action-chip-kicker">Registrar</span>
-    <span class="action-chip-val">Gasto o pago</span>
-  </a>
-</nav>
-
-<!-- Workspace -->
-<div class="workspace reveal">
-  <div class="workspace-main">
-
-    <section class="panel">
-      <header class="panel-head">
-        <div>
-          <h2 class="panel-title">Tarjetas de crédito</h2>
-          <p class="panel-desc">{{ data.total_revolving | currency }} revolvente{% if data.total_loan > 0 %} · {{ data.total_loan | currency }} en préstamos{% endif %}</p>
-        </div>
-        <a href="/tarjetas" class="btn btn-ghost btn-sm">Ver todas</a>
-      </header>
-      <div class="panel-body panel-body-flush">
-        <div class="cards-scroll">
-          {% for c in data.cards %}
-          {{ wallet_card(c.name, c.revolving_balance | currency, c.credit_line | currency, c.available | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
-          {% endfor %}
-        </div>
-      </div>
-    </section>
-
-    <div class="panel-duo">
-      <section class="panel">
-        <header class="panel-head">
-          <h2 class="panel-title">Deuda por tarjeta</h2>
-        </header>
-        <div class="panel-body">
-          <div class="chart"><canvas id="cardsChart"></canvas></div>
-        </div>
-      </section>
-      {% if data.patrimony %}
-      <section class="panel">
-        <header class="panel-head">
-          <h2 class="panel-title">Evolución patrimonial</h2>
-          <a href="/patrimonio" class="btn btn-ghost btn-sm">Historial</a>
-        </header>
-        <div class="panel-body">
-          <div class="chart"><canvas id="patChart"></canvas></div>
-        </div>
-      </section>
+    <div class="bb-home-hero">
+      <span class="bb-home-hero-label">Patrimonio neto</span>
+      <strong class="bb-home-hero-val" data-count="{{ data.unified_net }}" data-prefix="$">$0</strong>
+      {% if data.net_change is not none %}
+      <span class="bb-home-hero-delta {% if data.net_change >= 0 %}up{% else %}down{% endif %}">
+        {% if data.net_change >= 0 %}+{% else %}−{% endif %}{{ data.net_change | currency }} vs mes anterior
+      </span>
       {% endif %}
     </div>
 
-    <details class="panel panel-collapsible">
-      <summary class="panel-head panel-head-toggle">
-        <div>
-          <h2 class="panel-title">Gastos fijos mensuales</h2>
-          <p class="panel-desc">{{ data.other_total | currency }} / mes</p>
-        </div>
-        <span class="toggle-icon" aria-hidden="true"></span>
-      </summary>
-      <div class="panel-body">
-        {% for e in data.other_expenses %}
-        <form action="/gastos-fijos/{{ e.id }}" method="post" class="fixed-row">
-          <span class="fixed-name">{{ e.name }}</span>
-          <input name="amount" type="number" step="0.01" value="{{ e.amount }}">
-          <input name="due_day" type="number" min="1" max="31" class="fixed-day" value="{{ e.due_day or '' }}" placeholder="Día">
-          <button type="submit" class="btn btn-ghost btn-sm">OK</button>
-        </form>
-        {% endfor %}
-        <form action="/gastos-fijos/nuevo" method="post" class="fixed-row fixed-row-new">
-          <input name="name" required placeholder="Nuevo concepto" class="fixed-name-input">
-          <input name="amount" type="number" step="0.01" value="0">
-          <input name="due_day" type="number" min="1" max="31" class="fixed-day" placeholder="Día">
-          <button type="submit" class="btn btn-primary btn-sm">Agregar</button>
-        </form>
-      </div>
-    </details>
+    <nav class="bb-home-quick" aria-label="Acciones rápidas">
+      <a href="/tarjetas">Tarjetas</a>
+      <a href="/inversiones">Terminal</a>
+      <a href="/simulador">Simulador</a>
+      <a href="/movimientos" class="bb-home-quick-primary">+ Movimiento</a>
+    </nav>
+
+    <div class="bb-clock">
+      <div class="bb-market-status closed" id="homeMarketStatus">—</div>
+      <div id="homeClock">— CDMX</div>
+    </div>
+  </header>
+
+  <div class="bb-ticker bb-home-ticker" id="homeTicker" aria-hidden="true">
+    <div class="bb-ticker-track" id="homeTickerTrack"></div>
   </div>
 
-  <aside class="workspace-aside">
+  {% if data.month_close.remind or (next_pay and next_pay.days <= 3) %}
+  <div class="bb-home-alerts">
+    {% if data.month_close.remind %}
+    <div class="bb-home-alert warn">
+      <span class="bb-home-alert-label">Cierre de mes</span>
+      <strong>{{ data.month_close.label }}</strong>
+      <span class="bb-home-alert-meta">{{ data.month_close.days_left }} día(s) · sin snapshot</span>
+      <form action="/patrimonio/cerrar" method="post" class="inline-form">
+        <button type="submit" class="btn btn-primary btn-sm">Cerrar mes</button>
+      </form>
+    </div>
+    {% endif %}
+    {% if next_pay and next_pay.days <= 3 %}
+    <div class="bb-home-alert {{ next_pay.urgency }}">
+      <span class="bb-home-alert-label">Pago próximo</span>
+      <strong>{{ next_pay.name }}</strong>
+      <span class="bb-home-alert-meta">
+        {% if next_pay.days == 0 %}Hoy{% elif next_pay.days == 1 %}Mañana{% else %}En {{ next_pay.days }} días{% endif %}
+        {% if next_pay.amount %} · {{ next_pay.amount | currency }}{% endif %}
+      </span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
-    <section class="panel">
-      <header class="panel-head">
-        <h2 class="panel-title">Meta del mes</h2>
-      </header>
-      <div class="panel-body">
-        <div class="goal-block" id="widget-goal">
-          <div class="goal-kicker">Pagos a tarjetas</div>
-          <div class="goal-progress-text" id="goal-progress-text">$0 / $0</div>
-          <div class="goal-bar"><div class="goal-bar-fill" id="goal-progress-bar"></div></div>
-          <form class="goal-form" id="goal-form">
-            <input type="number" id="goal-input" min="0" step="100" placeholder="Meta pagos $" inputmode="decimal" value="{{ data.payment_goal | int if data.payment_goal else '' }}">
-            <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
-          </form>
-        </div>
-        <div class="goal-block" id="widget-savings" style="margin-top:1rem">
-          <div class="goal-kicker">Ahorro / inversión (GBM)</div>
-          <div class="goal-progress-text" id="savings-progress-text">$0 / $0</div>
-          <div class="goal-bar goal-bar-savings"><div class="goal-bar-fill" id="savings-progress-bar"></div></div>
-          <form class="goal-form" id="savings-form">
-            <input type="number" id="savings-input" min="0" step="100" placeholder="Meta ahorro $" inputmode="decimal" value="{{ data.savings_goal | int if data.savings_goal else '' }}">
-            <button type="submit" class="btn btn-ghost btn-sm">Guardar</button>
-          </form>
-        </div>
-        <div class="kpi-row">
-          <div class="kpi-item">
-            <span>Pagado</span>
-            <strong>{{ data.month_payments | currency }}</strong>
-          </div>
-          <div class="kpi-item">
-            <span>Fijos</span>
-            <strong>{{ data.other_total | currency }}</strong>
-          </div>
-          <div class="kpi-item">
-            <span>Libre</span>
-            <strong class="good">{{ data.total_available | currency }}</strong>
-          </div>
-        </div>
+  <div class="bb-home-kpis" aria-label="Indicadores">
+    <div class="bb-home-kpi">
+      <span class="bb-home-kpi-label">Activos</span>
+      <span class="bb-home-kpi-val">{{ data.total_assets | currency }}</span>
+    </div>
+    <div class="bb-home-kpi">
+      <span class="bb-home-kpi-label">Deuda revolvente</span>
+      <span class="bb-home-kpi-val bad">{{ data.total_revolving | currency }}</span>
+    </div>
+    {% if data.total_loan > 0 %}
+    <div class="bb-home-kpi">
+      <span class="bb-home-kpi-label">Préstamos</span>
+      <span class="bb-home-kpi-val">{{ data.total_loan | currency }}</span>
+    </div>
+    {% endif %}
+    <div class="bb-home-kpi">
+      <span class="bb-home-kpi-label">GBM</span>
+      <span class="bb-home-kpi-val accent">{{ data.gbm_live | currency }}</span>
+    </div>
+    <div class="bb-home-kpi">
+      <span class="bb-home-kpi-label">Disponible</span>
+      <span class="bb-home-kpi-val good">{{ data.total_available | currency }}</span>
+    </div>
+    <div class="bb-home-kpi">
+      <span class="bb-home-kpi-label">Salud crediticia</span>
+      <div class="bb-home-score" style="--ring-color: {{ hcolor }}">
+        <span class="bb-home-score-num">{{ data.health.score }}</span>
+        <span class="bb-home-score-tag">{{ data.health.label }}</span>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <section class="panel">
-      <header class="panel-head">
-        <h2 class="panel-title">Calendario de pagos</h2>
-      </header>
-      <div class="panel-body panel-body-tight">
-        {% if data.upcoming_payments %}
-        <div class="pay-schedule">
-          {% for p in data.upcoming_payments[:6] %}
-          <div class="pay-schedule-row {{ p.urgency }}">
-            <div class="pay-schedule-date">
-              {% if p.date %}{{ p.date.strftime('%d') }}<small>{{ p.date.strftime('%b') }}</small>{% endif %}
+  <div class="bb-home-grid">
+    <div class="bb-home-main">
+
+      <section class="bb-panel">
+        <header class="bb-panel-head">
+          <div>
+            <h2>Tarjetas de crédito</h2>
+            <p class="bb-panel-desc">{{ data.total_revolving | currency }} revolvente · {{ "%.0f"|format(data.usage_pct) }}% uso global</p>
+          </div>
+          <a href="/tarjetas" class="bb-home-link">Ver todas</a>
+        </header>
+        <div class="bb-panel-body-flush">
+          <div class="bb-home-cards">
+            {% for c in data.cards %}
+            {{ wallet_card(c.name, c.revolving_balance | currency, c.credit_line | currency, c.available | currency, c.usage_pct, '/tarjetas/' ~ c.id, loop.index0) }}
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <div class="bb-home-duo">
+        <section class="bb-panel">
+          <header class="bb-panel-head">
+            <h2>Deuda por tarjeta</h2>
+          </header>
+          <div class="bb-panel-body">
+            <div class="chart"><canvas id="cardsChart"></canvas></div>
+          </div>
+        </section>
+        {% if data.patrimony %}
+        <section class="bb-panel">
+          <header class="bb-panel-head">
+            <div>
+              <h2>Evolución patrimonial</h2>
             </div>
-            <div class="pay-schedule-info">
-              <strong>{{ p.name }}</strong>
-              {% if p.amount %}<span>{{ p.amount | currency }}</span>{% endif %}
+            <a href="/patrimonio" class="bb-home-link">Historial</a>
+          </header>
+          <div class="bb-panel-body">
+            <div class="chart"><canvas id="patChart"></canvas></div>
+          </div>
+        </section>
+        {% endif %}
+      </div>
+
+      <details class="bb-panel bb-home-details">
+        <summary class="bb-panel-head">
+          <div>
+            <h2>Gastos fijos mensuales</h2>
+            <p class="bb-panel-desc">{{ data.other_total | currency }} / mes</p>
+          </div>
+          <span class="bb-home-toggle" aria-hidden="true"></span>
+        </summary>
+        <div class="bb-panel-body">
+          {% for e in data.other_expenses %}
+          <form action="/gastos-fijos/{{ e.id }}" method="post" class="bb-home-fixed">
+            <span class="bb-home-fixed-name">{{ e.name }}</span>
+            <input name="amount" type="number" step="0.01" value="{{ e.amount }}">
+            <input name="due_day" type="number" min="1" max="31" value="{{ e.due_day or '' }}" placeholder="Día">
+            <button type="submit" class="btn btn-ghost btn-sm">OK</button>
+          </form>
+          {% endfor %}
+          <form action="/gastos-fijos/nuevo" method="post" class="bb-home-fixed">
+            <input name="name" required placeholder="Nuevo concepto">
+            <input name="amount" type="number" step="0.01" value="0">
+            <input name="due_day" type="number" min="1" max="31" placeholder="Día">
+            <button type="submit" class="btn btn-primary btn-sm">Agregar</button>
+          </form>
+        </div>
+      </details>
+    </div>
+
+    <aside class="bb-home-side">
+
+      <section class="bb-panel">
+        <header class="bb-panel-head">
+          <h2>Meta del mes</h2>
+        </header>
+        <div class="bb-panel-body">
+          <div class="bb-home-goal" id="widget-goal">
+            <div class="bb-home-goal-kicker">Pagos a tarjetas</div>
+            <div class="bb-home-goal-text" id="goal-progress-text">$0 / $0</div>
+            <div class="bb-home-goal-bar"><div class="bb-home-goal-bar-fill" id="goal-progress-bar"></div></div>
+            <form class="bb-home-goal-form" id="goal-form">
+              <input type="number" id="goal-input" min="0" step="100" placeholder="Meta pagos $" inputmode="decimal" value="{{ data.payment_goal | int if data.payment_goal else '' }}">
+              <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+            </form>
+          </div>
+          <div class="bb-home-goal" id="widget-savings">
+            <div class="bb-home-goal-kicker">Ahorro / inversión (GBM)</div>
+            <div class="bb-home-goal-text" id="savings-progress-text">$0 / $0</div>
+            <div class="bb-home-goal-bar"><div class="bb-home-goal-bar-fill savings" id="savings-progress-bar"></div></div>
+            <form class="bb-home-goal-form" id="savings-form">
+              <input type="number" id="savings-input" min="0" step="100" placeholder="Meta ahorro $" inputmode="decimal" value="{{ data.savings_goal | int if data.savings_goal else '' }}">
+              <button type="submit" class="btn btn-ghost btn-sm">Guardar</button>
+            </form>
+          </div>
+          <div class="bb-home-kpi-row">
+            <div><span>Pagado</span><strong>{{ data.month_payments | currency }}</strong></div>
+            <div><span>Fijos</span><strong>{{ data.other_total | currency }}</strong></div>
+            <div><span>Libre</span><strong class="good">{{ data.total_available | currency }}</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="bb-panel">
+        <header class="bb-panel-head">
+          <h2>Calendario de pagos</h2>
+        </header>
+        <div class="bb-panel-body-tight">
+          {% if data.upcoming_payments %}
+          <div class="bb-home-pay">
+            {% for p in data.upcoming_payments[:6] %}
+            <div class="bb-home-pay-row {{ p.urgency }}">
+              <div class="bb-home-pay-date">
+                {% if p.date %}{{ p.date.strftime('%d') }}<small>{{ p.date.strftime('%b') }}</small>{% endif %}
+              </div>
+              <div class="bb-home-pay-info">
+                <strong>{{ p.name }}</strong>
+                {% if p.amount %}<span>{{ p.amount | currency }}</span>{% endif %}
+              </div>
+              <div class="bb-home-pay-when">
+                {% if p.days == 0 %}Hoy{% elif p.days == 1 %}1d{% else %}{{ p.days }}d{% endif %}
+              </div>
             </div>
-            <div class="pay-schedule-when">
-              {% if p.days == 0 %}Hoy{% elif p.days == 1 %}1d{% else %}{{ p.days }}d{% endif %}
-            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="bb-home-empty">Configura el día de pago en cada tarjeta.</p>
+          {% endif %}
+        </div>
+      </section>
+
+      {% if data.insights %}
+      <section class="bb-panel">
+        <header class="bb-panel-head">
+          <h2>Señales</h2>
+        </header>
+        <div class="bb-panel-body-tight">
+          {% for item in data.insights[:4] %}
+          <div class="bb-home-insight">
+            <div class="bb-home-insight-title">{{ item.title }}</div>
+            <div class="bb-home-insight-text">{{ item.text }}</div>
           </div>
           {% endfor %}
         </div>
-        {% else %}
-        <p class="panel-empty">Configura el día de pago en cada tarjeta.</p>
-        {% endif %}
-      </div>
-    </section>
+      </section>
+      {% endif %}
 
-    {% if data.insights %}
-    <section class="panel">
-      <header class="panel-head">
-        <h2 class="panel-title">Señales</h2>
-      </header>
-      <div class="panel-body panel-body-tight">
-        {% for item in data.insights[:4] %}
-        <div class="insight">
-          <div class="insight-title">{{ item.title }}</div>
-          <div class="insight-text">{{ item.text }}</div>
-        </div>
-        {% endfor %}
-      </div>
-    </section>
-    {% endif %}
-
-    <section class="panel">
-      <header class="panel-head">
-        <h2 class="panel-title">Operaciones</h2>
-      </header>
-      <div class="panel-body panel-body-tight panel-body-ops">
-        <a href="/exportar/mensual.pdf" class="op-link">
-          <span>Reporte PDF</span>
-          <small>Resumen mensual</small>
-        </a>
-        <a href="/exportar/portafolio.csv" class="op-link">
-          <span>Portafolio CSV</span>
-          <small>Posiciones GBM</small>
-        </a>
-        <form action="/patrimonio/cerrar" method="post" class="op-form">
-          <button type="submit" class="op-link op-link-btn">
-            <span>Cerrar mes</span>
-            <small>Snapshot patrimonial</small>
-          </button>
-        </form>
-        <div class="op-link op-link-notify" id="widget-notify">
-          <div>
-            <span>Alertas de pago</span>
-            <small id="notify-status">Desactivadas</small>
+      <section class="bb-panel">
+        <header class="bb-panel-head">
+          <h2>Operaciones</h2>
+        </header>
+        <div class="bb-panel-body-tight">
+          <a href="/exportar/mensual.pdf" class="bb-home-op">
+            <span>Reporte PDF</span>
+            <small>Resumen mensual</small>
+          </a>
+          <a href="/exportar/portafolio.csv" class="bb-home-op">
+            <span>Portafolio CSV</span>
+            <small>Posiciones GBM</small>
+          </a>
+          <form action="/patrimonio/cerrar" method="post" class="inline-form">
+            <button type="submit" class="bb-home-op bb-home-op-btn">
+              <span>Cerrar mes</span>
+              <small>Snapshot patrimonial</small>
+            </button>
+          </form>
+          <div class="bb-home-op bb-home-op-notify" id="widget-notify">
+            <div>
+              <span>Alertas de pago</span>
+              <small id="notify-status">Desactivadas</small>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="notify-enable-btn">Activar</button>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm" id="notify-enable-btn">Activar</button>
         </div>
-      </div>
-    </section>
+      </section>
 
-  </aside>
+    </aside>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/home.js?v=1"></script>
 <script>
 initProWidgets();
 initSavingsWidget();
@@ -293,6 +299,10 @@ const cards = [
   { name: {{ c.name | tojson }}, revolving_balance: {{ c.revolving_balance }}, usage_pct: {{ c.usage_pct }} }{% if not loop.last %},{% endif %}
   {% endfor %}
 ];
+
+const chartGrid = 'rgba(26, 33, 48, 0.6)';
+const chartText = '#6d7788';
+
 initAnimatedChart(document.getElementById('cardsChart'), () => ({
   type: 'bar',
   data: {
@@ -304,18 +314,25 @@ initAnimatedChart(document.getElementById('cardsChart'), () => ({
         if (c.usage_pct >= 60) return '#fbbf24';
         return '#d4a853';
       }),
-      borderRadius: 3,
-      barPercentage: 0.6,
+      borderRadius: 2,
+      barPercentage: 0.65,
     }]
   },
-  options: { ...chartDefaults(), plugins: { legend: { display: false } } },
+  options: {
+    ...chartDefaults(),
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
+      y: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
+    },
+  },
 }));
 
 const pat = {{ data.patrimony | tojson }};
 if (pat.length && document.getElementById('patChart')) {
   const ctx = document.getElementById('patChart').getContext('2d');
-  const g = ctx.createLinearGradient(0, 0, 0, 220);
-  g.addColorStop(0, 'rgba(212,168,83,0.18)');
+  const g = ctx.createLinearGradient(0, 0, 0, 200);
+  g.addColorStop(0, 'rgba(212,168,83,0.2)');
   g.addColorStop(1, 'rgba(212,168,83,0)');
   initAnimatedChart(document.getElementById('patChart'), () => ({
     type: 'line',
@@ -329,7 +346,13 @@ if (pat.length && document.getElementById('patChart')) {
         fill: true, tension: 0.15, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
       }]
     },
-    options: chartDefaults(),
+    options: {
+      ...chartDefaults(),
+      scales: {
+        x: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
+        y: { grid: { color: chartGrid }, ticks: { color: chartText, font: { family: 'ui-monospace, monospace', size: 10 } } },
+      },
+    },
   }));
 }
 </script>
