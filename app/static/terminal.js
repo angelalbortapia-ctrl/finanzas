@@ -35,6 +35,7 @@ const BB = {
   pollMs: 45000,
   loading: false,
   catalogLoaded: false,
+  alerts: [],
   _loadId: 0,
 };
 
@@ -436,6 +437,49 @@ function destroyCharts() {
   BB._syncScales = false;
 }
 
+function fmtOhlc(n) {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function paintOhlc(bar) {
+  if (!bar) return;
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = fmtOhlc(v);
+  };
+  const open = bar.open ?? bar.value;
+  const close = bar.close ?? bar.value;
+  set('bbO', open);
+  set('bbH', bar.high ?? close);
+  set('bbL', bar.low ?? close);
+  set('bbC', close);
+  const chg = document.getElementById('bbOhlcChg');
+  if (chg && open) {
+    const pct = ((close - open) / open) * 100;
+    chg.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+    chg.className = `bb-ohlc-chg ${pct >= 0 ? 'up' : 'down'}`;
+  }
+}
+
+function bindOhlc(data) {
+  const last = data.points[data.points.length - 1];
+  const rest = { open: last.o, high: last.h, low: last.l, close: last.c };
+  paintOhlc(rest);
+  const series = BB.candleSeries || BB.priceSeries;
+  if (!BB.chart || !series) return;
+  BB.chart.subscribeCrosshairMove((param) => {
+    if (!param?.time) {
+      paintOhlc(rest);
+      return;
+    }
+    const row = param.seriesData?.get(series);
+    if (!row) return;
+    if (row.open != null) paintOhlc(row);
+    else paintOhlc({ value: row.value, open: row.value, high: row.value, low: row.value, close: row.value });
+  });
+}
+
 function renderCharts(data) {
   const chartEl = document.getElementById('bbChart');
   const volEl = document.getElementById('bbVolChart');
@@ -550,6 +594,7 @@ function renderCharts(data) {
   }
 
   fitChartTimeScale(BB.chart.timeScale());
+  bindOhlc(data);
   watchHistoryEdge();
   applyDividendMarkers(data);
   updateChartRangeLabel(data);
@@ -664,6 +709,7 @@ function updateSymbolHeader(quote, chartData) {
     dChg.textContent = bbPct(pct);
     dChg.className = 'bb-detail-chg ' + (pct >= 0 ? 'up' : 'down');
   }
+  paintDayRange(quote);
 
   if (quote && !quote.error) {
     const set = (id, v, fmt = bbFmt) => {
@@ -1280,6 +1326,194 @@ function toggleMA() {
   if (BB.lastChartData) renderCharts(BB.lastChartData);
 }
 
+function paintDayRange(quote) {
+  const box = document.getElementById('bbDayRange');
+  const mark = document.getElementById('bbDayMark');
+  const loEl = document.getElementById('bbDayLow');
+  const hiEl = document.getElementById('bbDayHigh');
+  const lo = quote?.low;
+  const hi = quote?.high;
+  const px = quote?.price;
+  if (!box || lo == null || hi == null || px == null || hi <= lo) {
+    if (box) box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  if (loEl) loEl.textContent = bbFmt(lo);
+  if (hiEl) hiEl.textContent = bbFmt(hi);
+  if (mark) {
+    const pct = Math.min(100, Math.max(0, ((px - lo) / (hi - lo)) * 100));
+    mark.style.left = pct + '%';
+  }
+}
+
+const ALERT_PCT_KINDS = new Set(['day_up', 'day_down', 'cost_drop']);
+
+function alertLabel(a) {
+  const t = Number(a.target);
+  switch (a.direction) {
+    case 'above': return `${a.symbol} ≥ ${bbFmt(t)}`;
+    case 'below': return `${a.symbol} ≤ ${bbFmt(t)}`;
+    case 'day_up': return `${a.symbol} +${t}% día`;
+    case 'day_down': return `${a.symbol} −${t}% día`;
+    case 'cost_drop': return `${a.symbol} −${t}% vs costo`;
+    default: return a.symbol;
+  }
+}
+
+function alertHitMessage(a) {
+  const px = a.trigger_price ?? a.price;
+  return `${alertLabel(a)} · disparó en ${bbFmt(px)}`;
+}
+
+function renderAlerts() {
+  const el = document.getElementById('bbAlertList');
+  if (!el) return;
+  const items = BB.alerts || [];
+  if (!items.length) {
+    el.hidden = true;
+    el.innerHTML = '';
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = items.map(a => {
+    const hit = !a.active && a.triggered_at;
+    return `<span class="bb-alert-chip ${hit ? 'hit' : ''}">${escHtml(alertLabel(a))}${hit ? ' · disparó' : ''}<button type="button" data-alert-id="${a.id}" aria-label="Quitar">×</button></span>`;
+  }).join('');
+  el.querySelectorAll('[data-alert-id]').forEach(btn => {
+    btn.addEventListener('click', () => removeAlert(btn.dataset.alertId));
+  });
+}
+
+function announceAlert(a) {
+  const msg = alertHitMessage(a);
+  const banner = document.createElement('div');
+  banner.className = 'bb-flash ok';
+  banner.textContent = msg;
+  document.getElementById('bbTerminal')?.prepend(banner);
+  if (window.Notification && Notification.permission === 'granted') {
+    try { new Notification('Finanzas', { body: msg }); } catch (_) {}
+  }
+}
+
+async function loadAlerts() {
+  try {
+    const res = await fetch('/api/terminal/alerts');
+    if (!res.ok) return;
+    const data = await res.json();
+    const items = data.items || [];
+    const triggered = items.filter(a => !a.active && a.triggered_at);
+    if (BB._seenTriggered) {
+      const fresh = triggered.filter(a => !BB._seenTriggered.has(a.id));
+      fresh.forEach(announceAlert);
+      if (fresh.length) dismissFlashBanners();
+    }
+    BB._seenTriggered = new Set(triggered.map(a => a.id));
+    BB.alerts = items;
+    renderAlerts();
+  } catch (_) {}
+}
+
+async function removeAlert(id) {
+  await fetch(`/api/terminal/alerts/${id}`, { method: 'DELETE' });
+  await loadAlerts();
+}
+
+function paSet(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('up', 'down');
+  if (cls) el.classList.add(cls);
+}
+
+function signCls(n) {
+  if (n == null) return '';
+  return n >= 0 ? 'up' : 'down';
+}
+
+function signedMoney(n) {
+  if (n == null) return '—';
+  return `${n >= 0 ? '+' : '−'}${bbFmt(Math.abs(n))}`;
+}
+
+async function loadPortfolioAnalytics(force = false) {
+  const box = document.getElementById('bbPortAnalytics');
+  if (!box) return;
+  const now = Date.now();
+  if (!force && BB._analyticsAt && now - BB._analyticsAt < 60000) return;
+  BB._analyticsAt = now;
+  try {
+    const res = await fetch('/api/terminal/portfolio/analytics');
+    if (!res.ok) return;
+    const a = await res.json();
+    if (!a.has_positions) { box.hidden = true; return; }
+    box.hidden = false;
+    paSet('paDay', a.priced ? signedMoney(a.day_pnl) : '—', signCls(a.day_pnl));
+    paSet('paDayPct', a.day_pct != null ? bbPct(a.day_pct) : 'sin cotización', signCls(a.day_pct));
+    paSet('paAlpha', a.alpha_pct != null ? bbPct(a.alpha_pct) : '—', signCls(a.alpha_pct));
+    paSet('paBench', a.benchmark_pct != null ? `IPC ${bbPct(a.benchmark_pct)}` : '');
+    paSet('paBest', a.best ? `${a.best.symbol} ${bbPct(a.best.change_pct)}` : '—', a.best ? signCls(a.best.change_pct) : '');
+    paSet('paWorst', a.worst ? `${a.worst.symbol} ${bbPct(a.worst.change_pct)}` : '—', a.worst ? signCls(a.worst.change_pct) : '');
+    paSet('paTop', a.top_symbol ? `${a.top_symbol} ${a.top_weight_pct}%` : '—');
+    paSet('paEff', a.effective_positions ? `≈${a.effective_positions} posiciones efectivas` : '');
+    paSet('paNet', bbPct(a.net_return_pct), signCls(a.net_return_pct));
+    paSet('paGross', `bruto ${bbPct(a.gross_return_pct)}`);
+  } catch (_) {}
+}
+
+function syncAlertTargetField() {
+  const dir = document.getElementById('bbAlertDir')?.value;
+  const label = document.getElementById('bbAlertTargetLabel');
+  const input = document.getElementById('bbAlertTarget');
+  const pct = ALERT_PCT_KINDS.has(dir);
+  if (label) label.textContent = pct ? 'Porcentaje (%)' : 'Precio';
+  if (input) input.placeholder = pct ? '5' : '180.00';
+}
+
+function setupPriceAlerts() {
+  const modal = document.getElementById('bbAlertModal');
+  const form = document.getElementById('bbAlertForm');
+  const err = document.getElementById('bbAlertError');
+  document.getElementById('bbAlertBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('bbAlertSymbol');
+    if (input) input.value = BB.symbol || '';
+    if (err) err.hidden = true;
+    modal?.classList.add('open');
+    if (window.Notification && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  });
+  document.getElementById('bbAlertClose')?.addEventListener('click', () => modal?.classList.remove('open'));
+  document.getElementById('bbAlertDir')?.addEventListener('change', syncAlertTargetField);
+  syncAlertTargetField();
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const symbol = document.getElementById('bbAlertSymbol')?.value || '';
+    const direction = document.getElementById('bbAlertDir')?.value || 'above';
+    const target = Number(document.getElementById('bbAlertTarget')?.value);
+    const res = await fetch('/api/terminal/alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, direction, target }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (err) {
+        err.hidden = false;
+        err.textContent = data.detail || 'No se pudo guardar';
+      }
+      return;
+    }
+    modal?.classList.remove('open');
+    form.reset();
+    syncAlertTargetField();
+    await loadAlerts();
+  });
+  loadAlerts();
+  loadPortfolioAnalytics(true);
+}
+
 function flashEl(el, dir) {
   if (!el) return;
   el.classList.remove('flash-up', 'flash-down');
@@ -1369,6 +1603,9 @@ function updateWatchlistPrices(quotes) {
     if (!q || q.price == null) return;
     const priceEl = row.querySelector('.bb-watch-price');
     if (!priceEl) return;
+    const prev = priceEl.dataset.px != null ? Number(priceEl.dataset.px) : null;
+    priceEl.dataset.px = String(q.price);
+    if (prev != null && prev !== q.price) flashEl(priceEl, q.price > prev ? 'up' : 'down');
     const chgEl = row.querySelector('.bb-watch-chg');
     const kind = q.kind || boardMeta(sym)?.kind;
     priceEl.textContent = formatQuotePrice(q.price, kind);
@@ -1413,7 +1650,8 @@ async function refreshLiveInner() {
       BB.symbol,
       'IPC',
       ...(window.BB_INIT?.holdings || []).map(h => (h.ticker || '').replace('BMV:', '')),
-    ])].filter(Boolean).slice(0, 12);
+      ...(BB.alerts || []).filter(a => a.active).map(a => a.symbol),
+    ])].filter(Boolean).slice(0, 16);
   }
 
   try {
@@ -1444,12 +1682,16 @@ async function refreshLiveInner() {
     if (BB.symbol && live.quotes?.[BB.symbol]) {
       const q = live.quotes[BB.symbol];
       const symPrice = document.getElementById('bbSymPrice');
+      const detailPrice = document.getElementById('bbDetailPrice');
       if (symPrice) {
         symPrice.textContent = formatQuotePrice(q.price, boardMeta(BB.symbol)?.kind);
         if (prevMainPrice != null && q.price !== prevMainPrice) {
           flashEl(symPrice, q.price > prevMainPrice ? 'up' : 'down');
+          flashEl(detailPrice, q.price > prevMainPrice ? 'up' : 'down');
         }
       }
+      if (detailPrice) detailPrice.textContent = formatQuotePrice(q.price, boardMeta(BB.symbol)?.kind);
+      paintDayRange(q);
       const chgEl = document.getElementById('bbSymChg');
       if (chgEl) {
         chgEl.textContent = bbPct(q.change_pct);
@@ -1463,6 +1705,10 @@ async function refreshLiveInner() {
     updatePortfolio(port);
     updateFx(fx.items);
     updateClock(market);
+    if (BB.workspace === 'market' || BB.workspace === 'portfolio') {
+      await loadAlerts();
+      loadPortfolioAnalytics();
+    }
   } catch (_) {}
 }
 
@@ -1645,6 +1891,7 @@ function initBloombergTerminal(config) {
     });
   });
 
+  setupPriceAlerts();
   document.getElementById('bbTerminal')?.classList.add('bb-ready');
   setupChartResizeObserver();
   dismissFlashBanners();

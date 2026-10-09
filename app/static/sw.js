@@ -1,4 +1,4 @@
-const CACHE = 'finanzas-pro-v59';
+const CACHE = 'finanzas-pro-v60';
 const PRECACHE = [
   '/',
   '/static/app.css?v=28',
@@ -6,8 +6,8 @@ const PRECACHE = [
   '/static/sw.js?v=59',
   '/static/chart.umd.min.js?v=1',
   '/static/charts.js?v=18',
-  '/static/terminal.css?v=43',
-  '/static/terminal.js?v=49',
+  '/static/terminal.css?v=47',
+  '/static/terminal.js?v=53',
   '/static/terminal-financials.js?v=4',
     '/static/emisora.js?v=6',
   '/static/lightweight-charts.js?v=2',

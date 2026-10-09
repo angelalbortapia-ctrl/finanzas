@@ -178,6 +178,13 @@
       <div class="bb-chart-stack">
         <div class="bb-chart-container" id="bbChartWrap">
           <div id="bbChartStatus" class="bb-chart-status"></div>
+          <div class="bb-ohlc" id="bbOhlc">
+            <span>O <b id="bbO">—</b></span>
+            <span>H <b id="bbH">—</b></span>
+            <span>L <b id="bbL">—</b></span>
+            <span>C <b id="bbC">—</b></span>
+            <span id="bbOhlcChg" class="bb-ohlc-chg"></span>
+          </div>
           <div id="bbChart"></div>
           <div class="bb-chart-hint">Arrastra para mover · Rueda para zoom · ← → para navegar</div>
         </div>
@@ -212,6 +219,11 @@
               <div class="bb-detail-price-row">
                 <span class="bb-detail-price" id="bbDetailPrice">—</span>
                 <span class="bb-detail-chg" id="bbDetailChg"></span>
+              </div>
+              <div class="bb-day-range" id="bbDayRange" hidden>
+                <span id="bbDayLow">—</span>
+                <div class="bb-day-track" title="Rango del día"><i id="bbDayMark"></i></div>
+                <span id="bbDayHigh">—</span>
               </div>
             </div>
             <div class="bb-stats bb-stats--detail" id="bbStats">
@@ -249,6 +261,7 @@
         <div class="bb-head-actions">
           <form action="/inversiones/importar" method="post" class="inline-form"><button type="submit" class="bb-tool-btn">Excel</button></form>
           <a href="/exportar/portafolio.csv" class="bb-tool-btn">CSV</a>
+          <button type="button" class="bb-tool-btn" id="bbAlertBtn" title="Avisar si el precio cruza un nivel">Alerta</button>
           <button type="button" class="bb-tool-btn" id="bbAddPosBtn">+ Posición</button>
         </div>
       </div>
@@ -262,6 +275,15 @@
         <div class="bb-port-item"><span>Sin posiciones</span><strong>—</strong></div>
         {% endif %}
       </div>
+      <div class="bb-port-analytics" id="bbPortAnalytics" hidden>
+        <div class="bb-pa-item"><span>Hoy</span><strong id="paDay">—</strong><small id="paDayPct"></small></div>
+        <div class="bb-pa-item"><span>vs IPC</span><strong id="paAlpha">—</strong><small id="paBench"></small></div>
+        <div class="bb-pa-item"><span>Mejor hoy</span><strong id="paBest">—</strong></div>
+        <div class="bb-pa-item"><span>Peor hoy</span><strong id="paWorst">—</strong></div>
+        <div class="bb-pa-item" title="Peso de la posición más grande y número efectivo de posiciones"><span>Concentración</span><strong id="paTop">—</strong><small id="paEff"></small></div>
+        <div class="bb-pa-item" title="Rendimiento después de comisiones de GBM"><span>Neto comisiones</span><strong id="paNet">—</strong><small id="paGross"></small></div>
+      </div>
+      <div class="bb-alert-list" id="bbAlertList" hidden></div>
       <div class="bb-panel-body bb-port-body-full" id="bbPortBody">
         <table class="bb-port-table" id="bbPortTable">
           <thead>
@@ -312,6 +334,30 @@
         <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
         <button type="button" class="btn btn-ghost btn-sm" id="bbPosClose">Cancelar</button>
       </div>
+    </form>
+  </div>
+</div>
+
+<div class="bb-kbd-overlay" id="bbAlertModal">
+  <div class="bb-kbd-card" style="max-width:420px">
+    <h3>Alerta de precio</h3>
+    <form id="bbAlertForm" class="form-grid" style="grid-template-columns:1fr 1fr;gap:.5rem">
+      <div class="field"><label>Ticker</label><input id="bbAlertSymbol" required placeholder="GFNORTEO"></div>
+      <div class="field"><label>Avisar cuando</label>
+        <select id="bbAlertDir">
+          <option value="above">el precio suba de</option>
+          <option value="below">el precio baje de</option>
+          <option value="day_up">suba en el día más de %</option>
+          <option value="day_down">caiga en el día más de %</option>
+          <option value="cost_drop">caiga debajo de mi costo más de %</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:span 2"><label id="bbAlertTargetLabel">Precio</label><input id="bbAlertTarget" type="number" step="0.01" min="0.01" required placeholder="180.00"></div>
+      <div class="field" style="grid-column:span 2;display:flex;gap:.4rem">
+        <button type="submit" class="btn btn-primary btn-sm">Guardar alerta</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="bbAlertClose">Cancelar</button>
+      </div>
+      <p class="bb-alert-hint" id="bbAlertError" hidden></p>
     </form>
   </div>
 </div>

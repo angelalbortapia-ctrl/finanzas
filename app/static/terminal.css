@@ -1530,6 +1530,118 @@ body.bb-resizing:has(.bb-resize-row.bb-dragging) { cursor: row-resize; }
   pointer-events: none;
 }
 .bb-chart-status:empty { display: none; }
+.bb-ohlc {
+  position: absolute;
+  top: .35rem;
+  right: .55rem;
+  z-index: 2;
+  display: flex;
+  gap: .55rem;
+  font-family: var(--bb-mono);
+  font-size: .68rem;
+  color: #8b95a8;
+  pointer-events: none;
+  letter-spacing: .02em;
+}
+.bb-ohlc b { color: #e8edf5; font-weight: 600; }
+.bb-ohlc-chg.up { color: #2dd4a0; }
+.bb-ohlc-chg.down { color: #ef5350; }
+.bb-day-range {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin-top: .45rem;
+  font-family: var(--bb-mono);
+  font-size: .62rem;
+  color: #6d7788;
+}
+.bb-day-track {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  background: #1a2130;
+  border-radius: 99px;
+}
+.bb-day-track i {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: #d4a853;
+  box-shadow: 0 0 0 2px rgba(212,168,83,.25);
+}
+.bb-port-analytics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  margin: .35rem .6rem 0;
+  background: #161c28;
+  border: 1px solid #161c28;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bb-pa-item {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  padding: .35rem .5rem;
+  background: #0a0d12;
+  min-width: 0;
+}
+.bb-pa-item span {
+  font-size: .58rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #5a6478;
+}
+.bb-pa-item strong {
+  font-family: var(--bb-mono);
+  font-size: .78rem;
+  color: #e8edf5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bb-pa-item small {
+  font-family: var(--bb-mono);
+  font-size: .6rem;
+  color: #6d7788;
+}
+.bb-pa-item .up { color: #2dd4a0; }
+.bb-pa-item .down { color: #ef5350; }
+@media (max-width: 900px) {
+  .bb-port-analytics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.bb-alert-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  padding: .35rem .6rem 0;
+}
+.bb-alert-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-family: var(--bb-mono);
+  font-size: .65rem;
+  padding: .2rem .45rem;
+  border: 1px solid #2a3140;
+  border-radius: 999px;
+  color: #c5cedb;
+}
+.bb-alert-chip.hit { border-color: #d4a853; color: #d4a853; }
+.bb-alert-chip button {
+  border: 0;
+  background: transparent;
+  color: #6d7788;
+  cursor: pointer;
+  padding: 0;
+}
+.bb-alert-hint { grid-column: span 2; color: #f87171; font-size: .75rem; margin: 0; }
+.bb-watch-price.flash-up, .bb-symbol-price.flash-up, .bb-detail-price.flash-up { color: #2dd4a0; }
+.bb-watch-price.flash-down, .bb-symbol-price.flash-down, .bb-detail-price.flash-down { color: #ef5350; }
 #bbChart {
   width: 100%;
   flex: 1 1 0;

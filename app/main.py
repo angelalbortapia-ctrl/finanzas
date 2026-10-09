@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.auth import COOKIE_NAME, check_pin, pin_enabled, pin_middleware
-from app.blocking import run_blocking
+from app.blocking import run_blocking, run_local
 from app.config import GBM_AUTO_IMPORT_HOURS, STATIC_V, USER_NAME
 from app.database import get_db, init_db
 from app.gbm import has_investment_data, import_from_excel as import_gbm_excel
@@ -63,6 +63,16 @@ from app.terminal import (
     get_quote_detail,
     preload_portfolio_cache,
 )
+from app.portfolio_tools import (
+    check_alerts_now,
+    create_price_alert,
+    delete_price_alert,
+    evaluate_price_alerts,
+    get_portfolio_analytics,
+    list_price_alerts,
+    notify_macos,
+    alert_message,
+)
 from app.catalog import catalog_count, list_catalog, search_catalog
 from app.seed import seed_from_excel
 from app.report import build_monthly_pdf
@@ -86,6 +96,26 @@ async def _gbm_auto_import_loop():
         except Exception as exc:
             logger.exception("GBM auto-import failed")
             log_sync_error("excel", str(exc))
+
+
+ALERT_CHECK_OPEN_SEC = 60
+ALERT_CHECK_CLOSED_SEC = 600
+
+
+async def _alerts_loop():
+    await asyncio.sleep(20)
+    while True:
+        delay = ALERT_CHECK_CLOSED_SEC
+        try:
+            market = await run_blocking(get_market_status)
+            if market.get("status") == "open":
+                delay = ALERT_CHECK_OPEN_SEC
+                hits = await run_blocking(check_alerts_now)
+                if hits:
+                    logger.info("price alerts fired: %s", [h["id"] for h in hits])
+        except Exception:
+            logger.exception("price alert check failed")
+        await asyncio.sleep(delay)
 
 
 @asynccontextmanager
@@ -113,10 +143,12 @@ async def lifespan(app: FastAPI):
             logger.debug("portfolio preload skipped on startup")
 
     preload_task = asyncio.create_task(_preload_portfolio())
+    alerts_task = asyncio.create_task(_alerts_loop())
     yield
     preload_task.cancel()
     gbm_task.cancel()
-    for task in (preload_task, gbm_task):
+    alerts_task.cancel()
+    for task in (preload_task, gbm_task, alerts_task):
         try:
             await task
         except asyncio.CancelledError:
@@ -200,6 +232,12 @@ class PaymentGoalBody(BaseModel):
 
 class SavingsGoalBody(BaseModel):
     amount: float
+
+
+class PriceAlertBody(BaseModel):
+    symbol: str
+    direction: str
+    target: float
 
 
 class TransactionBody(BaseModel):
@@ -297,7 +335,37 @@ async def terminal_live_api(symbols: str = ""):
         return {"quotes": {}}
     quotes = await run_blocking(get_live_quotes, syms)
     market = await run_blocking(get_market_status)
-    return {"quotes": quotes, "fetched_at": market["time_mx"]}
+    alerts_hit = await run_local(evaluate_price_alerts, quotes)
+    for hit in alerts_hit:
+        await run_local(notify_macos, alert_message(hit))
+    return {"quotes": quotes, "fetched_at": market["time_mx"], "alerts_hit": alerts_hit}
+
+
+@app.get("/api/terminal/portfolio/analytics")
+async def terminal_portfolio_analytics_api():
+    return await run_blocking(get_portfolio_analytics)
+
+
+@app.get("/api/terminal/alerts")
+async def terminal_alerts_api():
+    return {"items": await run_local(list_price_alerts)}
+
+
+@app.post("/api/terminal/alerts")
+async def terminal_alerts_create(body: PriceAlertBody):
+    try:
+        item = await run_local(create_price_alert, body.symbol, body.direction, body.target)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return item
+
+
+@app.delete("/api/terminal/alerts/{alert_id}")
+async def terminal_alerts_delete(alert_id: int):
+    ok = await run_local(delete_price_alert, alert_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    return {"ok": True}
 
 
 @app.get("/api/terminal/portfolio")

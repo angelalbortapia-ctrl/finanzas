@@ -273,36 +273,44 @@ def _normalize_hist_df(hist: Any) -> Any | None:
     return hist
 
 
+def _is_rate_limit(exc: BaseException) -> bool:
+    name = type(exc).__name__.lower()
+    msg = str(exc).lower()
+    return "ratelimit" in name or "too many requests" in msg or "429" in msg
+
+
 def _fetch_yahoo_history(yahoo: str, yf_period: str, interval: str) -> Any | None:
+    """Una petición por símbolo. Si Yahoo limita, no reintenta (evita el bloqueo)."""
     import yfinance as yf
 
     last_err: Exception | None = None
-    for attempt in range(2):
-        try:
-            hist = yf.Ticker(yahoo).history(
-                period=yf_period, interval=interval, auto_adjust=True,
-            )
-            hist = _normalize_hist_df(hist)
-            if hist is not None and not hist.empty:
-                return hist
-        except Exception as exc:
-            last_err = exc
-        try:
-            hist = yf.download(
-                yahoo,
-                period=yf_period,
-                interval=interval,
-                auto_adjust=True,
-                progress=False,
-                threads=False,
-            )
-            hist = _normalize_hist_df(hist)
-            if hist is not None and not hist.empty:
-                return hist
-        except Exception as exc:
-            last_err = exc
-        if attempt == 0:
-            time.sleep(0.4)
+    try:
+        hist = yf.Ticker(yahoo).history(
+            period=yf_period, interval=interval, auto_adjust=True,
+        )
+        hist = _normalize_hist_df(hist)
+        if hist is not None and not hist.empty:
+            return hist
+    except Exception as exc:
+        last_err = exc
+        if _is_rate_limit(exc):
+            raise
+    try:
+        hist = yf.download(
+            yahoo,
+            period=yf_period,
+            interval=interval,
+            auto_adjust=True,
+            progress=False,
+            threads=False,
+        )
+        hist = _normalize_hist_df(hist)
+        if hist is not None and not hist.empty:
+            return hist
+    except Exception as exc:
+        last_err = exc
+        if _is_rate_limit(exc):
+            raise
     if last_err:
         raise last_err
     return None
@@ -325,7 +333,7 @@ def _hist_to_points(hist: Any, interval: str) -> tuple[list[dict], list[dict]]:
         points.append({"t": ts, "o": o, "h": h, "l": l, "c": c})
         vol = _hist_column(row, "Volume", "volume") or 0
         volumes.append({"t": ts, "v": vol if vol == vol else 0})
-    return points, volumes
+    return _dedupe_chart_series(points, volumes)
 
 
 def _dedupe_chart_series(
@@ -1371,6 +1379,31 @@ def _extract_closes(data, ysym: str, multi: bool):
         return None, None
 
 
+def _finnhub_live(yahoo_symbol: str) -> dict | None:
+    from app.config import FINNHUB_API_KEY
+
+    if not FINNHUB_API_KEY or not yahoo_symbol or yahoo_symbol.startswith("^"):
+        return None
+    import json
+    import urllib.parse
+    import urllib.request
+
+    url = (
+        "https://finnhub.io/api/v1/quote?symbol="
+        f"{urllib.parse.quote(yahoo_symbol)}&token={FINNHUB_API_KEY}"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=6) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception:
+        return None
+    price = _safe_float(data.get("c"))
+    if not price:
+        return None
+    prev = _safe_float(data.get("pc")) or price
+    return {"price": price, "prev_close": prev}
+
+
 def get_live_quotes(symbols: list[str]) -> dict[str, dict]:
     now = time.time()
     resolved: dict[str, dict] = {}
@@ -1434,6 +1467,27 @@ def get_live_quotes(symbols: list[str]) -> dict[str, dict]:
             }
         except Exception:
             continue
+
+    for ysym in yahoo_syms:
+        bmv_sym = yahoo_to_bmv[ysym]
+        if bmv_sym in out:
+            continue
+        fh = _finnhub_live(ysym)
+        if not fh:
+            continue
+        price, prev = fh["price"], fh["prev_close"]
+        chg = price - prev
+        out[bmv_sym] = {
+            "symbol": bmv_sym,
+            "name": resolved[bmv_sym]["name"],
+            "price": price,
+            "prev_close": prev,
+            "change_abs": chg,
+            "change_pct": (chg / prev * 100) if prev else 0,
+            "volume": None,
+            "fetched_at": _now(),
+            "source": "finnhub",
+        }
 
     with _cache_lock:
         _quote_cache["at"] = now

@@ -194,6 +194,81 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("terminal", data)
         self.assertIn("insights", data)
 
+    def test_price_alert_fires_once(self):
+        from app.portfolio_tools import create_price_alert, evaluate_price_alerts, list_price_alerts
+
+        created = create_price_alert("GFNORTEO", "above", 10)
+        first = evaluate_price_alerts({"GFNORTEO": {"price": 11}})
+        second = evaluate_price_alerts({"GFNORTEO": {"price": 12}})
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first[0]["id"], created["id"])
+        self.assertEqual(second, [])
+        active = [a for a in list_price_alerts() if a["id"] == created["id"] and a["active"]]
+        self.assertEqual(active, [])
+
+    def test_alert_kinds_day_and_cost(self):
+        from app.portfolio_tools import _alert_crossed
+
+        self.assertTrue(_alert_crossed("day_down", 3, {"price": 97, "change_pct": -3.5}, None))
+        self.assertFalse(_alert_crossed("day_down", 3, {"price": 99, "change_pct": -1}, None))
+        self.assertTrue(_alert_crossed("day_up", 2, {"price": 103, "change_pct": 2.1}, None))
+        self.assertTrue(_alert_crossed("cost_drop", 10, {"price": 89}, 100))
+        self.assertFalse(_alert_crossed("cost_drop", 10, {"price": 91}, 100))
+        self.assertFalse(_alert_crossed("cost_drop", 10, {"price": 50}, None))
+
+    def test_alert_rejects_bad_input(self):
+        from app.portfolio_tools import create_price_alert
+
+        with self.assertRaises(ValueError):
+            create_price_alert("GFNORTEO", "sideways", 10)
+        with self.assertRaises(ValueError):
+            create_price_alert("GFNORTEO", "day_down", 150)
+        with self.assertRaises(ValueError):
+            create_price_alert("  ", "above", 10)
+        with self.assertRaises(ValueError):
+            create_price_alert("ZZZZSINPOSICION", "cost_drop", 10)
+
+    def test_portfolio_analytics_day_pnl(self):
+        from unittest.mock import patch
+
+        from app.portfolio_tools import get_portfolio_analytics
+
+        port = {
+            "holdings": [
+                {"symbol": "AAA", "shares": 10, "market_value": 1000},
+                {"symbol": "BBB", "shares": 5, "market_value": 500},
+            ],
+            "snapshot": {"net_pnl": 50, "net_return_pct": 3.4, "return_pct": 4.0},
+        }
+        quotes = {
+            "AAA": {"price": 110, "prev_close": 100, "change_pct": 10},
+            "BBB": {"price": 95, "prev_close": 100, "change_pct": -5},
+            "IPC": {"price": 1, "prev_close": 1, "change_pct": 1.0},
+        }
+        with patch("app.portfolio_tools.get_portfolio_live", return_value=port), patch(
+            "app.portfolio_tools.get_live_quotes", return_value=quotes,
+        ):
+            a = get_portfolio_analytics()
+        self.assertAlmostEqual(a["day_pnl"], 75.0)
+        self.assertAlmostEqual(a["day_pct"], 5.0)
+        self.assertAlmostEqual(a["alpha_pct"], 4.0)
+        self.assertEqual(a["best"]["symbol"], "AAA")
+        self.assertEqual(a["worst"]["symbol"], "BBB")
+        self.assertEqual(a["top_symbol"], "AAA")
+        self.assertAlmostEqual(a["effective_positions"], 1.8)
+
+    def test_dedupe_chart_series(self):
+        from app.terminal import _dedupe_chart_series
+
+        pts = [
+            {"t": "2026-01-02", "o": 1, "h": 1, "l": 1, "c": 1},
+            {"t": "2026-01-01", "o": 2, "h": 2, "l": 2, "c": 2},
+            {"t": "2026-01-01", "o": 3, "h": 3, "l": 3, "c": 3},
+        ]
+        out, _vol = _dedupe_chart_series(pts, [])
+        self.assertEqual([p["t"] for p in out], ["2026-01-01", "2026-01-02"])
+        self.assertEqual(out[0]["c"], 3)
+
     def test_chart_fallback_when_yahoo_fails(self):
         from unittest.mock import patch
 

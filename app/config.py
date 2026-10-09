@@ -8,6 +8,27 @@ DATA_DIR = Path(
         str(Path.home() / "Library" / "Application Support" / "Finanzas"),
     )
 )
+
+
+def _load_env_file(path: Path) -> None:
+    """KEY=VALUE por línea; las variables ya definidas en el entorno ganan."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_env_file(DATA_DIR / "finanzas.env")
+
 USER_NAME = os.environ.get("FINANZAS_USER", "Angel")
 EXCEL_PATH = Path(os.environ.get("FINANZAS_EXCEL", ROOT.parent / "Tarjetas.xlsx"))
 GBM_EXCEL_PATH = Path(os.environ.get(
@@ -39,11 +60,11 @@ STATIC_V = {
     "forge_js": 8,
     "forge_layout_js": 3,
     "offline_queue_js": 2,
-    "terminal_css": 43,
-    "terminal_js": 49,
+    "terminal_css": 47,
+    "terminal_js": 53,
     "terminal_financials_js": 4,
     "emisora_js": 6,
     "lightweight_charts_js": 2,
     "terminal_layout_js": 38,
-    "sw_js": 59,
+    "sw_js": 60,
 }

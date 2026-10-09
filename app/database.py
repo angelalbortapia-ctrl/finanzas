@@ -162,6 +162,17 @@ CREATE TABLE IF NOT EXISTS price_cache (
     fetched_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS price_alerts (
+    id INTEGER PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    target REAL NOT NULL,
+    created_at TEXT NOT NULL,
+    triggered_at TEXT,
+    trigger_price REAL,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS schema_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
