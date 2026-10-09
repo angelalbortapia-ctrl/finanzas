@@ -15,6 +15,9 @@ const C = {
 window.__charts = [];
 
 function chartDefaults() {
+  const dark = document.documentElement.dataset.theme !== 'light';
+  const text = dark ? '#6d7788' : '#5c6778';
+  const grid = dark ? 'rgba(42,49,64,0.8)' : 'rgba(26,33,48,0.12)';
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -39,16 +42,16 @@ function chartDefaults() {
     },
     scales: {
       x: {
-        ticks: { color: C.text, font: { size: 10 } },
+        ticks: { color: text, font: { size: 10 } },
         grid: { display: false },
         border: { display: false },
       },
       y: {
         ticks: {
-          color: C.text, font: { size: 10 },
+          color: text, font: { size: 10 },
           callback: v => '$' + Number(v).toLocaleString(),
         },
-        grid: { color: C.grid, drawTicks: false },
+        grid: { color: grid, drawTicks: false },
         border: { display: false },
       },
     },

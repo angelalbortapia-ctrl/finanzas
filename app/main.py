@@ -105,16 +105,22 @@ async def lifespan(app: FastAPI):
         except FileNotFoundError:
             pass
     gbm_task = asyncio.create_task(_gbm_auto_import_loop())
-    try:
-        await run_blocking(preload_portfolio_cache)
-    except Exception:
-        logger.debug("portfolio preload skipped on startup")
+
+    async def _preload_portfolio():
+        try:
+            await run_blocking(preload_portfolio_cache)
+        except Exception:
+            logger.debug("portfolio preload skipped on startup")
+
+    preload_task = asyncio.create_task(_preload_portfolio())
     yield
+    preload_task.cancel()
     gbm_task.cancel()
-    try:
-        await gbm_task
-    except asyncio.CancelledError:
-        pass
+    for task in (preload_task, gbm_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Finanzas", lifespan=lifespan)

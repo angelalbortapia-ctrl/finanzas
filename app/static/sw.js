@@ -1,20 +1,20 @@
-const CACHE = 'finanzas-pro-v57';
+const CACHE = 'finanzas-pro-v59';
 const PRECACHE = [
   '/',
   '/static/app.css?v=28',
   '/static/app.js?v=31',
-  '/static/sw.js?v=57',
+  '/static/sw.js?v=59',
   '/static/chart.umd.min.js?v=1',
   '/static/charts.js?v=18',
-  '/static/terminal.css?v=42',
+  '/static/terminal.css?v=43',
   '/static/terminal.js?v=48',
   '/static/terminal-financials.js?v=4',
-  '/static/emisora.js?v=4',
+    '/static/emisora.js?v=5',
   '/static/lightweight-charts.js?v=2',
   '/static/forge.js?v=8',
   '/static/forge-layout.js?v=3',
   '/static/offline-queue.js?v=2',
-  '/static/home.css?v=16',
+  '/static/home.css?v=18',
   '/static/home.js?v=6',
   '/static/terminal-layout.js?v=38',
   '/static/icons/icon-192.png',
@@ -59,9 +59,7 @@ self.addEventListener('fetch', (e) => {
 
   if (request.mode === 'navigate') {
     e.respondWith(
-      fetch(request)
-        .then((res) => res)
-        .catch(() => caches.match('/offline').then((r) => r || caches.match('/')))
+      fetch(request).catch(() => caches.match('/offline'))
     );
   }
 });

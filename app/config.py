@@ -2,6 +2,12 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(
+    os.environ.get(
+        "FINANZAS_DATA_DIR",
+        str(Path.home() / "Library" / "Application Support" / "Finanzas"),
+    )
+)
 USER_NAME = os.environ.get("FINANZAS_USER", "Angel")
 EXCEL_PATH = Path(os.environ.get("FINANZAS_EXCEL", ROOT.parent / "Tarjetas.xlsx"))
 GBM_EXCEL_PATH = Path(os.environ.get(
@@ -26,18 +32,18 @@ GBM_AUTO_IMPORT_HOURS = int(os.environ.get("FINANZAS_GBM_IMPORT_HOURS", "12"))
 STATIC_V = {
     "app_css": 28,
     "app_js": 31,
-    "home_css": 16,
+    "home_css": 18,
     "home_js": 6,
     "charts_js": 18,
     "chart_umd_js": 1,
     "forge_js": 8,
     "forge_layout_js": 3,
     "offline_queue_js": 2,
-    "terminal_css": 42,
+    "terminal_css": 43,
     "terminal_js": 48,
     "terminal_financials_js": 4,
-    "emisora_js": 4,
+    "emisora_js": 5,
     "lightweight_charts_js": 2,
     "terminal_layout_js": 38,
-    "sw_js": 57,
+    "sw_js": 59,
 }

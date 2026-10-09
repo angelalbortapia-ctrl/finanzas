@@ -43,6 +43,29 @@
       .replace(/"/g, '&quot;');
   }
 
+  const OFFLINE_MSG = 'Servidor apagado — doble clic en abrir.command (Downloads/Finanzas)';
+
+  async function emisoraFetch(url, ms = 20000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try {
+      return await fetch(url, { signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function showEmisoraOffline() {
+    const status = document.getElementById('bbFinStatus');
+    const chartStatus = document.getElementById('bbEmisoraChartStatus');
+    if (status) status.textContent = OFFLINE_MSG;
+    if (chartStatus) chartStatus.textContent = OFFLINE_MSG;
+    const content = document.getElementById('bbFinContent');
+    if (content) {
+      content.innerHTML = `<p class="bb-fin-empty">${esc(OFFLINE_MSG)}</p>`;
+    }
+  }
+
   function destroyEmisoraChart() {
     if (emisoraChart) {
       emisoraChart.remove();
@@ -102,7 +125,7 @@
 
   async function loadEmisoraChart(symbol, period) {
     const sym = (symbol || '').replace('BMV:', '').toUpperCase();
-    const res = await fetch(`/api/terminal/chart?symbol=${encodeURIComponent(sym)}&period=${encodeURIComponent(period)}`);
+    const res = await emisoraFetch(`/api/terminal/chart?symbol=${encodeURIComponent(sym)}&period=${encodeURIComponent(period)}`);
     return res.ok ? res.json() : {};
   }
 
@@ -189,8 +212,8 @@
     try {
       const [chartData, quoteRes, holdingRes] = await Promise.all([
         loadEmisoraChart(sym, period),
-        fetch(`/api/terminal/quote?symbol=${encodeURIComponent(sym)}`),
-        fetch(`/api/terminal/holding?symbol=${encodeURIComponent(sym)}`),
+        emisoraFetch(`/api/terminal/quote?symbol=${encodeURIComponent(sym)}`),
+        emisoraFetch(`/api/terminal/holding?symbol=${encodeURIComponent(sym)}`),
       ]);
       if (loadId !== global.FIN_PAGE._loadId) return;
 
@@ -220,7 +243,7 @@
       if (naEl) naEl.hidden = true;
       if (typeof showFinHubLoading === 'function') showFinHubLoading();
 
-      const finRes = await fetch(`/api/terminal/financials?symbol=${encodeURIComponent(sym)}&section=resumen`);
+      const finRes = await emisoraFetch(`/api/terminal/financials?symbol=${encodeURIComponent(sym)}&section=resumen`);
       if (loadId !== global.FIN_PAGE._loadId) return;
       if (!finRes.ok) {
         const status = document.getElementById('bbFinStatus');
@@ -240,9 +263,8 @@
       if (typeof renderFinHub === 'function') {
         renderFinHub(quote, global.FIN_PAGE.lastFinancials, global.FIN_PAGE.finTab);
       }
-    } catch (_) {
-      const status = document.getElementById('bbFinStatus');
-      if (status) status.textContent = 'Error al cargar datos';
+    } catch (err) {
+      showEmisoraOffline();
     }
   }
 

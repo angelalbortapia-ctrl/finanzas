@@ -1,5 +1,24 @@
 /* Forge UI — estética terminal Bloomberg (inicio + páginas internas) */
 
+.bb-server-down {
+  position: fixed;
+  top: var(--bb-chrome-h, 46px);
+  left: 0;
+  right: 0;
+  z-index: 500;
+  padding: .55rem .85rem;
+  background: rgba(255, 23, 68, 0.92);
+  color: #fff;
+  font-size: .82rem;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+.bb-server-down code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: .1rem .35rem;
+  border-radius: 3px;
+}
+
 .page-dashboard .page-body,
 .page-cards .page-body,
 .page-patrimony .page-body,
@@ -231,7 +250,7 @@
 /* ── KPI strip ── */
 .bb-home-kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 1px;
   background: var(--bb-line);
   border-bottom: 1px solid var(--bb-line);
@@ -239,11 +258,12 @@
 }
 .bb-home-kpi {
   background: #0c1018;
-  padding: .6rem .75rem;
+  padding: .65rem .8rem;
   display: flex;
   flex-direction: column;
-  gap: .2rem;
+  gap: .35rem;
   min-width: 0;
+  min-height: 3.4rem;
   transition: background .15s;
 }
 .bb-home-kpi:hover { background: #10151f; }
@@ -253,15 +273,16 @@
   text-transform: uppercase;
   letter-spacing: .08em;
   color: var(--bb-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  display: block;
 }
 .bb-home-kpi-val {
   font-family: var(--bb-mono);
-  font-size: .88rem;
+  font-size: clamp(.78rem, 1.6vw, .92rem);
   font-weight: 700;
   color: var(--bb-ink);
+  line-height: 1.2;
+  word-break: break-word;
 }
 .bb-home-kpi-val.good { color: var(--bb-green); }
 .bb-home-kpi-val.bad { color: var(--bb-red); }
@@ -552,6 +573,9 @@ body.bb-resizing-row { cursor: row-resize; }
 .bb-home .chart {
   height: 200px;
   position: relative;
+  background: #0a0d14;
+  border-radius: 4px;
+  padding: .35rem .45rem .2rem;
 }
 .pat-chart-panel {
   display: flex;
@@ -1079,6 +1103,11 @@ html[data-theme="light"] .pat-stat { background: #f8fafc; }
   padding: .5rem .7rem;
   border-bottom: 1px solid rgba(26, 33, 48, .7);
   text-align: left;
+  vertical-align: middle;
+}
+.bb-tbl td {
+  background: #0c1018;
+  color: var(--bb-ink-2);
 }
 .bb-tbl th {
   font-size: .58rem;
@@ -1446,12 +1475,17 @@ html[data-theme="light"] .pat-stat { background: #f8fafc; }
   align-items: center;
   gap: .45rem;
 }
+.bb-tbl .bb-weight-pct {
+  display: block;
+  margin-bottom: .2rem;
+}
 .bb-weight-bar {
-  height: 3px;
-  background: rgba(255,255,255,.06);
+  height: 4px;
+  background: rgba(255,255,255,.1);
   border-radius: 2px;
   margin-top: .2rem;
   overflow: hidden;
+  min-width: 48px;
 }
 .bb-weight-fill {
   height: 100%;
@@ -1699,4 +1733,20 @@ html[data-theme="light"] .bb-chrome-theme {
   background: transparent;
   cursor: pointer;
   font-size: .85rem;
+}
+html[data-theme="light"] .bb-home-kpi {
+  background: #fff;
+}
+html[data-theme="light"] .bb-tbl td {
+  background: #fff;
+}
+html[data-theme="light"] .bb-tbl th {
+  background: #f4f6fa;
+}
+html[data-theme="light"] .bb-home .chart,
+html[data-theme="light"] .pat-chart-wrap {
+  background: #f8fafc;
+}
+html[data-theme="light"] .bb-weight-bar {
+  background: rgba(26, 33, 48, .12);
 }

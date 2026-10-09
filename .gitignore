@@ -9,5 +9,13 @@ google-credentials.json
 .venv/
 venv/
 .url
+.finanzas.pid
+.ensure-server.lock.d
+.ensure-server.lock
+finanzas-stdout.log
+finanzas-stderr.log
+
+# Copia de runtime: ~/Finanzas (scripts/sync-runtime.sh)
+finanzas.log
 .DS_Store
 .pydeps/

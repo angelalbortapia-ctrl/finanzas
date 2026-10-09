@@ -1,37 +1,15 @@
 #!/bin/bash
 cd "$(dirname "$0")"
+xattr -d com.apple.quarantine "$0" 2>/dev/null || true
+chmod +x scripts/*.sh *.command 2>/dev/null || true
 
-URL=""
-for port in 8000 8001 8002 8003; do
-  try="http://127.0.0.1:$port"
-  code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "$try/" 2>/dev/null || echo "000")
-  if [ "$code" = "200" ]; then
-    URL="$try"
-    break
-  fi
-done
-if [ -z "$URL" ] && [ -f .url ]; then
-  URL=$(cat .url | tr -d '[:space:]')
-fi
-if [ -z "$URL" ]; then
-  URL="http://127.0.0.1:8000"
+bash scripts/sync-runtime.sh >/dev/null
+bash scripts/install-always-on.sh >/dev/null 2>&1 || bash scripts/ensure-server.sh >/dev/null || true
+
+if [ -x "$HOME/Applications/Finanzas.app/Contents/MacOS/Finanzas" ]; then
+  open -a Finanzas
+  exit 0
 fi
 
-# Si no responde, intentar arrancar
-if ! curl -s --connect-timeout 2 "$URL/health" >/dev/null 2>&1; then
-  echo "Servidor apagado — iniciando..."
-  osascript -e "tell application \"Terminal\" to do script \"cd '$PWD' && python3 run.py\""
-  sleep 3
-fi
-
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -s --connect-timeout 2 "$URL/health" >/dev/null 2>&1; then
-    echo "Abriendo $URL"
-    open "$URL"
-    exit 0
-  fi
-  sleep 1
-done
-
-echo "No responde. Haz doble clic en iniciar.command"
-read -p "Presiona Enter para cerrar..."
+URL="$(bash scripts/ensure-server.sh)" || exit 1
+open "${URL//localhost/127.0.0.1}/inversiones"

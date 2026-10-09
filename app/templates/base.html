@@ -16,8 +16,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Finanzas">
+  {% if is_forge %}<script>try{var t=localStorage.getItem('finanzas-theme');document.documentElement.dataset.theme=t==='light'?'light':'dark';}catch(e){document.documentElement.dataset.theme='dark';}</script>{% endif %}
 </head>
-<body class="page-{{ page or 'dashboard' }}{% if is_forge %} forge-mode{% endif %}">
+<body class="page-{{ page or 'dashboard' }}{% if is_forge %} forge-mode{% endif %}{% if page in ('investments', 'emisora') %} terminal-theme{% endif %}">
   {% if not is_forge %}
   <header class="topbar">
     <a href="/" class="brand">
@@ -73,6 +74,30 @@
   {% endif %}
 
   {% if is_forge %}{% include "chrome.html" %}{% endif %}
+  {% if is_forge %}
+  <div class="bb-server-down" id="bbServerDown" hidden role="alert">
+    <strong>Servidor apagado.</strong>
+    Abre la app <strong>Finanzas</strong> en Aplicaciones, o doble clic en <code>abrir.command</code>.
+    Enlace: <code>http://127.0.0.1:8000/inversiones</code>
+  </div>
+  <script>
+  (function () {
+    var el = document.getElementById('bbServerDown');
+    if (!el) return;
+    var fails = 0;
+    function ping() {
+      fetch('/health', { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (r) {
+          if (r.ok) { fails = 0; el.hidden = true; }
+          else { fails++; el.hidden = fails < 2; }
+        })
+        .catch(function () { fails++; el.hidden = fails < 2; });
+    }
+    ping();
+    setInterval(ping, 8000);
+  })();
+  </script>
+  {% endif %}
 
   <main class="shell">
     {% if page not in ('dashboard', 'investments', 'cards', 'patrimony', 'simulator', 'transactions', 'login') %}

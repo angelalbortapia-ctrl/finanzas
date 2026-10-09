@@ -53,8 +53,10 @@
   --bb-amber: var(--accent, #d4a853);
   --bb-green: var(--good, #34d399);
   --bb-red: var(--bad, #f87171);
+  --bb-green-hi: #00e676;
+  --bb-red-hi: #ff1744;
   --bb-blue: #60a5fa;
-  --bb-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --bb-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --bb-sans: var(--font, system-ui, sans-serif);
   --bb-fs: 14px;
   --bb-fs-sm: 12px;
@@ -1685,6 +1687,72 @@ body.bb-resizing:has(.bb-resize-row.bb-dragging) { cursor: row-resize; }
 .bb-kbd-card dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .3rem .8rem; }
 .bb-kbd-card dt { color: var(--bb-muted); }
 .bb-kbd-card dd { margin: 0; font-family: var(--bb-mono); color: var(--bb-ink); }
+
+/* ── Tipografía numérica terminal ── */
+.terminal-table td,
+.bb-port-table td,
+.bb-fin-table td,
+.ticker-price,
+.bb-tick-price,
+.bb-watch-price,
+.bb-emisora-price,
+.bb-idx-card-price,
+.bb-fx-card-price,
+.bb-detail-price,
+.bb-stat-val {
+  font-family: var(--bb-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+
+/* Variación de precio — alta visibilidad */
+.price-up,
+.bb-port-table .up,
+.bb-fin-table--earnings td.up,
+.bb-tick-chg.up,
+.bb-watch-chg.up,
+.bb-emisora-chg.up,
+.bb-detail-chg.up,
+.bb-idx-card-chg.up {
+  color: var(--bb-green-hi);
+}
+
+.price-down,
+.bb-port-table .down,
+.bb-fin-table--earnings td.down,
+.bb-tick-chg.down,
+.bb-watch-chg.down,
+.bb-emisora-chg.down,
+.bb-detail-chg.down,
+.bb-idx-card-chg.down {
+  color: var(--bb-red-hi);
+}
+
+.price-up,
+.bb-price-up {
+  background-color: rgba(0, 230, 118, 0.08);
+}
+
+.price-down,
+.bb-price-down {
+  background-color: rgba(255, 23, 68, 0.08);
+}
+
+/* CRT sutil — solo terminal oscuro */
+html:not([data-theme="light"]) body.terminal-theme::after {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  z-index: 99999;
+  pointer-events: none;
+  opacity: 0.15;
+}
 
 /* ── Efectos y animaciones ── */
 @keyframes bb-slide-down {

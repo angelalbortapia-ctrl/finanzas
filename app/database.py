@@ -1,9 +1,39 @@
 import os
+import shutil
 import sqlite3
 from pathlib import Path
+from typing import Optional
 
-_DEFAULT_DB = Path(__file__).parent.parent / "finanzas.db"
-DB_PATH = Path(os.environ.get("FINANZAS_DB_PATH", str(_DEFAULT_DB)))
+from app.config import DATA_DIR, ROOT
+
+DB_PATH = Path(os.environ.get("FINANZAS_DB_PATH", str(DATA_DIR / "finanzas.db")))
+
+
+def _migrate_legacy_db() -> None:
+    """Una sola base de datos en Application Support (evita duplicados en Descargas/~/Finanzas)."""
+    canonical = (DATA_DIR / "finanzas.db").resolve()
+    if DB_PATH.resolve() != canonical:
+        return
+    if DB_PATH.exists() and DB_PATH.stat().st_size > 0:
+        return
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    best: Optional[Path] = None
+    best_mtime = 0.0
+    for candidate in (ROOT / "finanzas.db", Path.home() / "Finanzas" / "finanzas.db"):
+        if not candidate.is_file():
+            continue
+        try:
+            size = candidate.stat().st_size
+            mtime = candidate.stat().st_mtime
+        except OSError:
+            continue
+        if size <= 0:
+            continue
+        if mtime >= best_mtime:
+            best_mtime = mtime
+            best = candidate
+    if best is not None:
+        shutil.copy2(best, DB_PATH)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS persons (
@@ -196,6 +226,7 @@ def _migrate(conn):
 
 
 def init_db():
+    _migrate_legacy_db()
     conn = get_db()
     conn.executescript(SCHEMA)
     _migrate(conn)

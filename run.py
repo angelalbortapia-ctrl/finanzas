@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Arrancar Finanzas en http://127.0.0.1:8000"""
+import atexit
 import os
 import socket
 import subprocess
@@ -11,7 +12,23 @@ import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+PID_FILE = ROOT / ".finanzas.pid"
 PORT = int(os.environ.get("FINANZAS_PORT", "8000"))
+HOST = os.environ.get("FINANZAS_HOST", "127.0.0.1")
+
+
+def _write_pid_file() -> None:
+    try:
+        PID_FILE.write_text(str(os.getpid()))
+    except OSError:
+        pass
+
+
+def _clear_pid_file() -> None:
+    try:
+        PID_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
@@ -79,9 +96,21 @@ def wait_port_free(port: int, timeout: float = 4.0) -> bool:
     return can_bind(port)
 
 
+def finanzas_healthy(port: int) -> bool:
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            return resp.status == 200 and "ok" in body
+    except Exception:
+        return False
+
+
 def prepare_port() -> int:
     if can_bind(PORT):
         return PORT
+    if finanzas_healthy(PORT):
+        print(f"Finanzas ya responde en el puerto {PORT} — no se inicia otra copia.")
+        raise SystemExit(0)
     print(f"Puerto {PORT} ocupado — cerrando instancia anterior de Finanzas...")
     kill_port(PORT)
     if wait_port_free(PORT):
@@ -134,7 +163,10 @@ def main():
     if os.environ.get("FINANZAS_OPEN_BROWSER", "1") == "1":
         open_browser_when_ready(url)
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=port, reload=False)
+    os.environ.setdefault("PYTHONPATH", str(ROOT))
+    _write_pid_file()
+    atexit.register(_clear_pid_file)
+    uvicorn.run("app.main:app", host=HOST, port=port, reload=False)
 
 
 if __name__ == "__main__":

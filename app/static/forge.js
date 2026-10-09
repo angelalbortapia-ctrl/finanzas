@@ -389,8 +389,8 @@ function initKpiFlash() {
 function initTheme() {
   const btn = document.getElementById('bbThemeBtn');
   const stored = localStorage.getItem('finanzas-theme');
-  const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-  const theme = stored || (prefersLight ? 'light' : 'dark');
+  // Terminal Bloomberg = oscuro por defecto (el tema claro es opt-in)
+  const theme = stored === 'light' ? 'light' : 'dark';
   document.documentElement.dataset.theme = theme;
   if (btn) btn.textContent = theme === 'light' ? '☀' : '◐';
   btn?.addEventListener('click', () => {
