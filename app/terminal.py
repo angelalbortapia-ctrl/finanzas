@@ -328,6 +328,22 @@ def _hist_to_points(hist: Any, interval: str) -> tuple[list[dict], list[dict]]:
     return points, volumes
 
 
+def _dedupe_chart_series(
+    points: list[dict], volumes: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    """Lightweight Charts falla si hay timestamps repetidos (Yahoo a veces duplica filas)."""
+    if not points:
+        return points, volumes
+    vol_map = {v["t"]: v for v in volumes}
+    by_t: dict[str, dict] = {}
+    for p in points:
+        by_t[p["t"]] = p
+    keys = sorted(by_t.keys())
+    out_pts = [by_t[k] for k in keys]
+    out_vol = [vol_map.get(k, {"t": k, "v": 0}) for k in keys]
+    return out_pts, out_vol
+
+
 def _stretch_flat_price(price: float, days: int = 45) -> list[dict]:
     """Último recurso: línea plana para que la gráfica no quede vacía."""
     today = datetime.now(MX_TZ).date()
@@ -528,7 +544,14 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
     with _cache_lock:
         cached = _cache_get(_chart_cache, cache_key, CHART_CACHE_SEC)
         if cached:
-            return dict(cached["payload"])
+            payload = dict(cached["payload"])
+            if payload.get("points"):
+                pts, vol = _dedupe_chart_series(
+                    payload["points"], payload.get("volume") or [],
+                )
+                payload["points"] = pts
+                payload["volume"] = vol
+            return payload
 
     yahoo = meta["yahoo"]
     yf_period, interval = PERIOD_MAP.get(period, ("6mo", "1d"))
@@ -568,6 +591,8 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
 
     if data_source == "cache":
         volumes = [{"t": p["t"], "v": 0} for p in points]
+
+    points, volumes = _dedupe_chart_series(points, volumes)
 
     indicators = _compute_indicators(points)
     if data_source == "yahoo":

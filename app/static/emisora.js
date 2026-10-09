@@ -87,10 +87,17 @@
     if (label) label.textContent = `Precio · ${chartPeriodLabel(period)}`;
   }
 
+  function dedupeEmisoraPoints(points) {
+    const map = new Map();
+    points.forEach((p) => map.set(emisoraParseTime(p.t), p));
+    return Array.from(map.values()).sort((a, b) => emisoraParseTime(a.t).localeCompare(emisoraParseTime(b.t)));
+  }
+
   function renderEmisoraChart(data) {
     const el = document.getElementById('bbEmisoraChart');
     const status = document.getElementById('bbEmisoraChartStatus');
-    if (!el || !data?.points?.length) {
+    const pts = data?.points?.length ? dedupeEmisoraPoints(data.points) : [];
+    if (!el || !pts.length) {
       if (status) status.textContent = data?.error || 'Sin datos de precio';
       return;
     }
@@ -118,7 +125,7 @@
       lineWidth: 2,
     });
     emisoraSeries.setData(
-      data.points.map(p => ({ time: emisoraParseTime(p.t), value: p.c }))
+      pts.map(p => ({ time: emisoraParseTime(p.t), value: p.c }))
     );
     emisoraChart.timeScale().fitContent();
   }

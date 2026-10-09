@@ -148,6 +148,19 @@ function parseTime(t, period) {
   return t.slice(0, 10);
 }
 
+function dedupeChartPoints(points, period) {
+  if (!points?.length) return [];
+  const map = new Map();
+  points.forEach((p) => map.set(String(parseTime(p.t, period)), p));
+  const out = Array.from(map.values());
+  out.sort((a, b) => {
+    const ta = parseTime(a.t, period);
+    const tb = parseTime(b.t, period);
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
+  });
+  return out;
+}
+
 const BB_CHART_FONT = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
 
 function measureChartSize() {
@@ -427,6 +440,17 @@ function renderCharts(data) {
   const chartEl = document.getElementById('bbChart');
   const volEl = document.getElementById('bbVolChart');
   const statusEl = document.getElementById('bbChartStatus');
+  if (data?.points?.length) {
+    const period = data.period || BB.period || '6mo';
+    const deduped = dedupeChartPoints(data.points, period);
+    if (deduped.length !== data.points.length) {
+      data = { ...data, points: deduped };
+      if (data.volume?.length) {
+        const volMap = new Map(data.volume.map((v) => [String(parseTime(v.t, period)), v]));
+        data.volume = deduped.map((p) => volMap.get(String(parseTime(p.t, period))) || { t: p.t, v: 0 });
+      }
+    }
+  }
   if (!chartEl || !data?.points?.length) {
     setChartLoading(false);
     return;
