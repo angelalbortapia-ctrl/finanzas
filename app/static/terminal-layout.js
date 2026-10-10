@@ -65,11 +65,6 @@ function bbSetLayoutEditMode(on) {
   if (termReset) termReset.hidden = !on;
   if (forgeReset) forgeReset.hidden = !on;
   if (typeof bbSetWidgetsLayoutEdit === 'function') bbSetWidgetsLayoutEdit(!!on);
-  if (on) {
-    requestAnimationFrame(() => {
-      document.getElementById('bbWidgetsDeck')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    });
-  }
 }
 
 function bbToggleLayoutEditMode() {

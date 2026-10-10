@@ -2492,3 +2492,51 @@
   font-size: 0.72rem;
   letter-spacing: 0.1em;
 }
+
+/* ═══ Modo Ajustar: misma señal visual arriba (splitters) y abajo (widgets) ═══ */
+.forge-mode.page-investments .bb-workspace-edit-hint {
+  display: none;
+  margin: 0 0 0.65rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--bb-pro-accent, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px dashed rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  grid-column: 1 / -1;
+}
+.forge-mode.page-investments #bbTerminal.bb-layout-edit .bb-workspace-edit-hint {
+  display: block;
+}
+.forge-mode.page-investments #bbTerminal.bb-layout-edit .bb-chart-area,
+.forge-mode.page-investments #bbTerminal.bb-layout-edit .bb-rail {
+  outline: 1px dashed rgba(56, 189, 248, 0.32);
+  outline-offset: 3px;
+  border-radius: 14px;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-resize-handle {
+  background: rgba(56, 189, 248, 0.22) !important;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-resize-col {
+  width: 10px;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-resize-row {
+  height: 10px;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-resize-handle:hover,
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-resize-handle.bb-dragging {
+  background: rgba(56, 189, 248, 0.5) !important;
+}
+.forge-mode.page-investments #bbTerminal.bb-layout-edit .bb-chart-area::after,
+.forge-mode.page-investments #bbTerminal.bb-layout-edit .bb-workspace-pane::after {
+  display: none;
+}
+.forge-mode.page-investments .bb-widgets-edit-hint strong,
+.forge-mode.page-investments .bb-workspace-edit-hint strong {
+  font-weight: 700;
+  color: #e2e8f0;
+}
