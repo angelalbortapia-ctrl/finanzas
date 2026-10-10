@@ -92,10 +92,10 @@ def is_safe_logo_url(url: str) -> bool:
     return any(host == allowed or host.endswith(f".{allowed}") for allowed in LOGO_HOST_ALLOWLIST)
 
 
-def _logo_url(slug: str) -> str:
+def _logo_url(slug: str) -> str | None:
     slug = slug.strip().lstrip("/")
     if slug.startswith("http://") or slug.startswith("https://"):
-        return slug
+        return slug if is_safe_logo_url(slug) else None
     return f"{TV_CDN}/{slug}.svg"
 
 
@@ -113,7 +113,10 @@ def _cache_get(symbol: str) -> dict[str, Any] | None:
         ).fetchone()
         conn.close()
         if row and row["value"]:
-            payload = {"symbol": key, "url": row["value"], "source": "db", "at": time.time()}
+            url = row["value"]
+            if not is_safe_logo_url(url):
+                return None
+            payload = {"symbol": key, "url": url, "source": "db", "at": time.time()}
             _mem_cache[key] = payload
             return payload
     except Exception as exc:
@@ -122,6 +125,9 @@ def _cache_get(symbol: str) -> dict[str, Any] | None:
 
 
 def _cache_set(symbol: str, url: str, source: str) -> None:
+    if not url or not is_safe_logo_url(url):
+        logger.debug("refusing to cache unsafe logo url for %s", symbol)
+        return
     key = symbol.upper().replace("BMV:", "")
     payload = {"symbol": key, "url": url, "source": source, "at": time.time()}
     _mem_cache[key] = payload
@@ -198,7 +204,9 @@ def get_symbol_logo(symbol: str) -> dict[str, Any]:
     key = symbol.upper().replace("BMV:", "")
     cached = _cache_get(key)
     if cached and cached.get("url"):
-        return cached
+        if is_safe_logo_url(cached["url"]):
+            return cached
+        return {"symbol": key, "url": None, "source": None, "at": time.time()}
 
     slug = LOGO_OVERRIDES.get(key) or SPECIAL_LOGOS.get(key)
     source = "override"
@@ -229,11 +237,15 @@ def get_logo_fast(symbol: str) -> dict[str, Any]:
     key = symbol.upper().replace("BMV:", "")
     cached = _cache_get(key)
     if cached and cached.get("url"):
-        return cached
+        if is_safe_logo_url(cached["url"]):
+            return cached
+        return {"symbol": key, "url": None, "source": None, "at": time.time()}
     slug = LOGO_OVERRIDES.get(key) or SPECIAL_LOGOS.get(key)
     if not slug:
         return {"symbol": key, "url": None, "source": None, "at": time.time()}
     url = _logo_url(slug)
+    if not url:
+        return {"symbol": key, "url": None, "source": None, "at": time.time()}
     _cache_set(key, url, "override")
     return {"symbol": key, "url": url, "source": "override", "at": time.time()}
 
@@ -277,11 +289,14 @@ def get_logos_batch(symbols: list[str], *, fast: bool = True) -> dict[str, str |
         if fast:
             info = get_logo_fast(key)
             url = info.get("url")
+            if url and not is_safe_logo_url(url):
+                url = None
             if not url:
                 missing.append(key)
             out[key] = url
         else:
-            out[key] = get_symbol_logo(key).get("url")
+            raw = get_symbol_logo(key).get("url")
+            out[key] = raw if raw and is_safe_logo_url(raw) else None
     if fast and missing:
         enqueue_logos_batch(missing)
     return out

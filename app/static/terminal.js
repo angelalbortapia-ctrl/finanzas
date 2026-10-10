@@ -534,15 +534,12 @@ function mountTradingViewEmbeds(tvSymbol, widgetsLoadId, forSymbol) {
 async function loadWidgets(symbol, opts = {}) {
   const reqSym = bbNormSym(symbol || BB.symbol);
   const loadId = opts.loadId != null ? opts.loadId : BB._widgetsLoadId;
-  const deck = document.getElementById('bbWidgetsDeck');
-  if (!deck || !isStockWorkspace()) {
-    if (deck) {
-      deck.hidden = true;
-      deck.dataset.widgetSymbol = '';
-    }
-    clearTradingViewEmbedHosts();
+  if (!isWidgetsWorkspace()) {
+    hideWidgetsDeck();
     return;
   }
+  const deck = document.getElementById('bbWidgetsDeck');
+  if (!deck) return;
   const status = document.getElementById('bbWidgetsStatus');
   deck.hidden = false;
   if (!opts.skipReset) {
@@ -1246,10 +1243,7 @@ async function loadSymbol(symbol, period) {
     resetWidgetsForSymbol(reqSymEarly);
     loadWidgets(reqSymEarly, { loadId: BB._widgetsLoadId, skipReset: true });
   } else {
-    resetWidgetsForSymbol(null);
-    const wDeck = document.getElementById('bbWidgetsDeck');
-    if (wDeck) wDeck.hidden = true;
-    clearTradingViewEmbedHosts();
+    hideWidgetsDeck();
   }
   if (ws === 'indices') {
     BB.indicesSymbol = BB.symbol;
@@ -1381,6 +1375,18 @@ function logoHtml(symbol, extraCls = '') {
 
 function isStockWorkspace() {
   return BB.workspace === 'market' || BB.workspace === 'portfolio';
+}
+
+/** Deck inferior de indicadores: solo en vista Mercado (acciones/ETF). */
+function isWidgetsWorkspace() {
+  return BB.workspace === 'market';
+}
+
+function hideWidgetsDeck() {
+  resetWidgetsForSymbol(null);
+  const deck = document.getElementById('bbWidgetsDeck');
+  if (deck) deck.hidden = true;
+  clearTradingViewEmbedHosts();
 }
 
 function updateWatchFollowBtn() {
@@ -1939,7 +1945,9 @@ function switchWorkspace(id) {
     }
     const needsChart = prev !== 'market' || !BB.lastChartData?.points?.length;
     if (needsChart) loadSymbol(sym, BB.period);
+    else loadWidgets(bbNormSym(sym));
   } else if (id === 'portfolio') {
+    hideWidgetsDeck();
     setChartLoading(false);
     const st = document.getElementById('bbChartStatus');
     if (st && !BB.lastChartData?.points?.length) st.textContent = '';

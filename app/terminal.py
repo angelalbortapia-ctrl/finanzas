@@ -1097,7 +1097,7 @@ def _merge_financials_payload(existing: dict[str, Any], patch: dict[str, Any]) -
 
 def _slice_financials(payload: dict[str, Any], section: str) -> dict[str, Any]:
     if section == "all":
-        return dict(payload)
+        return {k: v for k, v in payload.items() if not k.startswith("_")}
     base_keys = (
         "symbol", "name", "yahoo", "applicable", "currency",
         "message", "error", "fetched_at", "sections_loaded",
@@ -1192,17 +1192,63 @@ def _fetch_financials_resumen(
         "analysts": _analysts_snapshot(ticker, info, price),
         "fetched_at": _now(),
         "sections_loaded": ["resumen", "beneficios", "stats"],
+        "_yahoo_info": _yahoo_info_for_widgets(info),
     }
 
 
-def _yahoo_profile_bundle(meta: dict[str, Any], fin: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+_YAHOO_WIDGET_INFO_KEYS = (
+    "longBusinessSummary",
+    "website",
+    "fullTimeEmployees",
+    "sector",
+    "industry",
+    "city",
+    "country",
+    "profitMargins",
+    "returnOnEquity",
+    "revenueGrowth",
+    "debtToEquity",
+    "currentRatio",
+    "freeCashflow",
+)
+
+
+def _yahoo_info_for_widgets(info: dict[str, Any]) -> dict[str, Any]:
+    return {
+        k: info[k]
+        for k in _YAHOO_WIDGET_INFO_KEYS
+        if k in info and info[k] is not None
+    }
+
+
+def _financials_cached_raw(symbol: str) -> dict[str, Any] | None:
+    meta = get_symbol_meta(symbol)
+    if not meta:
+        return None
+    with _cache_lock:
+        hit = _cache_get(_financials_cache, meta["symbol"], FINANCIALS_CACHE_SEC)
+    if not hit:
+        return None
+    return dict(hit["payload"])
+
+
+def _yahoo_profile_bundle(
+    meta: dict[str, Any],
+    fin: dict[str, Any],
+    info_cached: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    info = info_cached if info_cached else None
+    if not info:
+        try:
+            import yfinance as yf
+
+            info = yf.Ticker(meta["yahoo"]).info or {}
+        except Exception as exc:
+            logger.debug("widgets yahoo profile: %s", exc)
+            return None, None
     try:
         from app.emisora_analysis import compute_health
-        import yfinance as yf
-
-        info = yf.Ticker(meta["yahoo"]).info or {}
-    except Exception as exc:
-        logger.debug("widgets yahoo profile: %s", exc)
+    except ImportError:
         return None, None
     health = compute_health(info)
     summary = (info.get("longBusinessSummary") or "").strip()
@@ -1281,7 +1327,8 @@ def _compose_terminal_widgets(symbol: str) -> dict[str, Any]:
             tv = {"applicable": False, "error": str(exc)}
             warnings.append("TradingView no respondió")
         if meta.get("yahoo"):
-            health, profile = _yahoo_profile_bundle(meta, fin)
+            info_snap = (_financials_cached_raw(sym) or {}).get("_yahoo_info")
+            health, profile = _yahoo_profile_bundle(meta, fin, info_snap)
 
     margins = (fin.get("income_trends") or {}).get("quarterly", {}).get("margin_pct") or []
 
@@ -1344,6 +1391,7 @@ def _fetch_financials_full(
         "fundamentals": fundamentals,
         "fetched_at": _now(),
         "sections_loaded": list(ALL_FIN_SECTIONS),
+        "_yahoo_info": _yahoo_info_for_widgets(info),
     }
     if not _financials_has_statements(result) and not earnings.get("quarterly"):
         result["message"] = "Estados financieros no disponibles para esta emisora en Yahoo Finance"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import time
 from typing import Callable
 
 from fastapi import Request
@@ -23,6 +24,24 @@ PUBLIC_PREFIXES = (
     "/offline",
     "/login",
 )
+
+_LOGIN_FAILS: dict[str, list[float]] = {}
+_LOGIN_MAX_FAILS = 12
+_LOGIN_WINDOW_SEC = 300
+
+
+def login_rate_limited(client_ip: str) -> bool:
+    now = time.time()
+    hits = [t for t in _LOGIN_FAILS.get(client_ip, []) if now - t < _LOGIN_WINDOW_SEC]
+    _LOGIN_FAILS[client_ip] = hits
+    return len(hits) >= _LOGIN_MAX_FAILS
+
+
+def record_login_failure(client_ip: str) -> None:
+    now = time.time()
+    hits = [t for t in _LOGIN_FAILS.get(client_ip, []) if now - t < _LOGIN_WINDOW_SEC]
+    hits.append(now)
+    _LOGIN_FAILS[client_ip] = hits
 
 
 def pin_enabled() -> bool:
@@ -54,9 +73,6 @@ def make_session_token() -> str:
 def verify_session_token(token: str | None) -> bool:
     if not pin_enabled() or not token:
         return False
-    # Compatibilidad con cookies antiguas (PIN en texto plano)
-    if token == FINANZAS_PIN:
-        return True
     try:
         nonce, sig = token.rsplit(".", 1)
     except ValueError:

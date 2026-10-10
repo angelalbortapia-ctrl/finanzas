@@ -566,12 +566,21 @@ async def login_page(request: Request, next: str = "/"):
 
 @app.post("/login")
 async def login_submit(request: Request, pin: str = Form(...), next: str = Form("/")):
-    from app.auth import make_session_token, safe_next
+    from app.auth import (
+        login_rate_limited,
+        make_session_token,
+        record_login_failure,
+        safe_next,
+    )
 
     dest = safe_next(next)
     if not pin_enabled():
         return RedirectResponse(dest, status_code=303)
+    client_ip = request.client.host if request.client else "unknown"
+    if login_rate_limited(client_ip):
+        return RedirectResponse(f"/login?error=rate&next={quote(dest)}", status_code=303)
     if not check_pin(pin.strip()):
+        record_login_failure(client_ip)
         return RedirectResponse(f"/login?error=1&next={quote(dest)}", status_code=303)
     response = RedirectResponse(dest, status_code=303)
     response.set_cookie(

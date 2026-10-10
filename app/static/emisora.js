@@ -56,6 +56,15 @@
       .replace(/"/g, '&quot;');
   }
 
+  function safeHttpUrl(u) {
+    try {
+      const url = new URL(u, global.location.origin);
+      return ['http:', 'https:'].includes(url.protocol) ? url.href : '#';
+    } catch (_) {
+      return '#';
+    }
+  }
+
   const OFFLINE_MSG = 'Servidor apagado — doble clic en abrir.command (Downloads/Finanzas)';
 
   async function emisoraFetch(url, ms = 20000) {
@@ -429,7 +438,10 @@
       if (prof.ceo) bits.push(`<div><span>CEO</span><strong>${esc(prof.ceo)}</strong></div>`);
       if (prof.industry) bits.push(`<div><span>Industria</span><strong>${esc(prof.industry)}</strong></div>`);
       if (prof.city || prof.country) bits.push(`<div><span>Sede</span><strong>${esc([prof.city, prof.country].filter(Boolean).join(', '))}</strong></div>`);
-      if (prof.website) bits.push(`<div><span>Web</span><a href="${esc(prof.website)}" target="_blank" rel="noopener">${esc(prof.website.replace(/^https?:\/\//, ''))}</a></div>`);
+      if (prof.website) {
+        const web = safeHttpUrl(prof.website);
+        bits.push(`<div><span>Web</span><a href="${esc(web)}" target="_blank" rel="noopener noreferrer">${esc(prof.website.replace(/^https?:\/\//, ''))}</a></div>`);
+      }
       if (bits.length) {
         about.hidden = false;
         about.innerHTML = bits.join('');
@@ -656,7 +668,7 @@
       return;
     }
     el.innerHTML = slice.map(n => `
-      <a class="bb-news-item" href="${esc(n.url)}" target="_blank" rel="noopener">
+      <a class="bb-news-item" href="${esc(safeHttpUrl(n.url))}" target="_blank" rel="noopener noreferrer">
         <div class="bb-news-title">${esc(n.title)}</div>
         <div class="bb-news-meta">${esc(n.source || n.publisher || '')}</div>
       </a>
