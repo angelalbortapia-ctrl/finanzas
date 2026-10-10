@@ -1,25 +1,14 @@
-const CACHE = 'finanzas-pro-v60';
+const CACHE = 'finanzas-pro-v91';
+/** Shell offline — terminal/emisora siempre red primero (ver fetch). */
 const PRECACHE = [
   '/',
+  '/offline',
   '/static/app.css?v=28',
-  '/static/app.js?v=31',
-  '/static/sw.js?v=59',
-  '/static/chart.umd.min.js?v=1',
-  '/static/charts.js?v=18',
-  '/static/terminal.css?v=47',
-  '/static/terminal.js?v=53',
-  '/static/terminal-financials.js?v=4',
-    '/static/emisora.js?v=6',
-  '/static/lightweight-charts.js?v=2',
-  '/static/forge.js?v=8',
-  '/static/forge-layout.js?v=3',
-  '/static/offline-queue.js?v=2',
-  '/static/home.css?v=18',
-  '/static/home.js?v=6',
-  '/static/terminal-layout.js?v=38',
+  '/static/app.js?v=33',
+  '/static/home.css?v=39',
+  '/static/sw.js?v=91',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
-  '/offline',
 ];
 
 self.addEventListener('install', (e) => {
@@ -41,8 +30,15 @@ self.addEventListener('fetch', (e) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  // JS siempre desde red — evita scripts truncados en caché que rompen el análisis
-  if (url.pathname.startsWith('/static/') && !url.pathname.endsWith('.js')) {
+  const terminalAsset =
+    /^\/static\/(terminal|terminal-pro|terminal-financials|terminal-layout|terminal-widgets-layout|emisora|lightweight-charts|home)(\.|-)/.test(
+      url.pathname
+    );
+  if (terminalAsset || url.pathname.endsWith('.js')) {
+    e.respondWith(fetch(request));
+    return;
+  }
+  if (url.pathname.startsWith('/static/')) {
     e.respondWith(
       fetch(request)
         .then((res) => {
@@ -58,9 +54,7 @@ self.addEventListener('fetch', (e) => {
   }
 
   if (request.mode === 'navigate') {
-    e.respondWith(
-      fetch(request).catch(() => caches.match('/offline'))
-    );
+    e.respondWith(fetch(request).catch(() => caches.match('/offline')));
   }
 });
 

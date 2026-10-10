@@ -3,7 +3,9 @@
 {% block page_title %}Terminal de mercados{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="/static/terminal.css?v={{ static_v.terminal_css }}">
+<link rel="stylesheet" href="/static/terminal-pro.css?v={{ static_v.terminal_pro_css }}">
 <script src="/static/lightweight-charts.js?v={{ static_v.lightweight_charts_js }}"></script>
+<meta name="description" content="Terminal BMV — gráficas, watchlist y análisis por emisora">
 {% endblock %}
 {% block content %}
 
@@ -32,30 +34,21 @@
 {% set term = data.terminal if data.terminal is defined else {} %}
 {% set snap = data.snapshot %}
 
-<div class="bb-shell" id="bbTerminal"
+<div class="bb-shell bb-shell--pro bb-shell--tv bb-shell--scroll bb-terminal-immersive" id="bbTerminal"
      data-symbol="{{ term.default_symbol or 'IPC' }}"
      data-catalog-count="{{ term.catalog_count or 0 }}">
 
-  <header class="bb-topbar">
-    <span class="bb-logo">TERMINAL <span>· BMV</span></span>
-    <div class="bb-cmd-wrap">
-      <input type="text" class="bb-cmd" id="bbCommand" placeholder="GFNORTEO · IPC · WALMEX" autocomplete="off" spellcheck="false">
-      <span class="bb-cmd-hint">/</span>
-      <div class="bb-cmd-results" id="bbCmdResults"></div>
+  <div class="bb-terminal-sr" aria-hidden="true">
+    <div id="bbFx"></div>
+    <div id="bbMarketStatus"></div>
+    <div id="bbClock"></div>
+  </div>
+
+  <div class="bb-ticker bb-price-ticker" id="bbTicker" aria-label="Cotizaciones en vivo">
+    <span class="bb-ticker-label">En vivo</span>
+    <div class="bb-ticker-viewport">
+      <div class="bb-ticker-track" id="bbTickerTrack"></div>
     </div>
-
-    <div class="bb-fx" id="bbFx"><span class="bb-fx-label">Cargando FX…</span></div>
-
-    <div class="bb-clock">
-      <div class="bb-market-status {{ term.market.status if term.market else 'closed' }}" id="bbMarketStatus">
-        {{ term.market.label if term.market else '—' }}
-      </div>
-      <div id="bbClock">{{ term.market.time_mx if term.market else '' }} CDMX</div>
-    </div>
-  </header>
-
-  <div class="bb-ticker" id="bbTicker">
-    <div class="bb-ticker-track" id="bbTickerTrack"></div>
   </div>
 
   <div class="bb-indices-strip" id="bbIndicesStrip" hidden>
@@ -78,12 +71,114 @@
   </nav>
 
   <div class="bb-main bb-view-market" id="bbGrid">
-    <aside class="bb-panel bb-watch">
-      <div class="bb-panel-head">
-        <h2 id="bbWatchTitle">Watchlist</h2>
-        <span class="bb-head-meta" id="bbWatchMeta">{{ term.catalog_count or 0 }} emisoras</span>
+    <div class="bb-workspace-pane" id="bbWorkspacePane">
+    <section class="bb-panel bb-chart-area">
+      <div class="bb-panel-head bb-chart-head">
+        <div class="bb-chart-head-row">
+        <div class="bb-chart-hero bb-symbol-block" id="bbSymbolBlock">
+          <span class="bb-watch-logo-wrap bb-chart-hero-logo" id="bbSymLogoWrap">
+            <img class="bb-watch-logo" id="bbSymLogo" src="/api/terminal/logo/{{ term.default_symbol or 'IPC' }}" alt=""
+              onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
+            <span class="bb-watch-logo-fb" aria-hidden="true">{{ (term.default_symbol or 'IPC')[:2] }}</span>
+          </span>
+          <div class="bb-chart-hero-body">
+            <div class="bb-chart-hero-titles">
+              <span class="bb-symbol-name" id="bbSymName">{{ term.default_symbol or 'IPC' }}</span>
+              <span class="bb-chart-sym-desc" id="bbChartSymDesc"></span>
+            </div>
+            <div class="bb-chart-hero-quote">
+              <span class="bb-symbol-price" id="bbSymPrice">—</span>
+              <span class="bb-symbol-chg" id="bbSymChg"></span>
+              <span class="bb-data-fresh" id="bbDataFresh" hidden></span>
+            </div>
+          </div>
+          <a class="bb-hero-analyze" id="bbHeroAnalyze" href="/emisora/{{ term.default_symbol or 'IPC' }}" hidden>Análisis</a>
+        </div>
+        <div class="bb-chart-search-wrap bb-cmd-wrap" id="bbChartSearchWrap">
+          <input type="search" class="bb-cmd bb-chart-search" id="bbChartSearch"
+            placeholder="Buscar emisora…" autocomplete="off" spellcheck="false"
+            aria-label="Buscar emisora para la gráfica" aria-controls="bbChartSearchResults" aria-expanded="false">
+          <span class="bb-cmd-hint" aria-hidden="true">/</span>
+          <div class="bb-cmd-results bb-chart-search-results" id="bbChartSearchResults" role="listbox"></div>
+        </div>
+        </div>
       </div>
-      <input type="text" class="bb-watch-search" id="bbWatchSearch" placeholder="Buscar símbolo...">
+      <div class="bb-chart-toolbar bb-chart-toolbar--pro">
+        <div class="bb-control-bar">
+          <div class="bb-periods" id="bbPeriods">
+            <button type="button" class="bb-period" data-period="1d" data-key="1">1D</button>
+            <button type="button" class="bb-period" data-period="5d" data-key="2">5D</button>
+            <button type="button" class="bb-period" data-period="1mo" data-key="3">1M</button>
+            <button type="button" class="bb-period" data-period="3mo" data-key="4">3M</button>
+            <button type="button" class="bb-period active" data-period="6mo" data-key="5">6M</button>
+            <button type="button" class="bb-period" data-period="1y" data-key="6">1A</button>
+            <button type="button" class="bb-period" data-period="2y" data-key="7">2A</button>
+            <button type="button" class="bb-period" data-period="5y" data-key="8">5A</button>
+            <button type="button" class="bb-period" data-period="10y" data-key="9">10A</button>
+            <button type="button" class="bb-period bb-period-max" data-period="max" data-key="0">MAX</button>
+          </div>
+          <div class="bb-control-sep" aria-hidden="true"></div>
+          <div class="bb-chart-types" id="bbChartTypes">
+            <button type="button" class="bb-tool-btn active" data-chart-type="candle" title="Velas japonesas">Velas</button>
+            <button type="button" class="bb-tool-btn" data-chart-type="line" title="Línea de cierre">Línea</button>
+            <button type="button" class="bb-tool-btn" data-chart-type="area" title="Área de cierre">Área</button>
+          </div>
+          <div class="bb-control-sep" aria-hidden="true"></div>
+          <div class="bb-chart-tools">
+            <button type="button" class="bb-tool-btn active" id="bbToggleMA" title="Medias móviles 20/50">MA</button>
+            <button type="button" class="bb-tool-btn" id="bbToggleBB" title="Bandas de Bollinger">BB</button>
+            <button type="button" class="bb-tool-btn" id="bbToggleRSI" title="RSI 14">RSI</button>
+            <button type="button" class="bb-tool-btn" id="bbToggleLog" title="Escala logarítmica">Log</button>
+            <button type="button" class="bb-tool-btn" id="bbCompareBtn" title="C=vs IPC · Shift+C o clic derecho = varios">vs IPC</button>
+            <button type="button" class="bb-tool-btn active" id="bbToggleDiv" title="Marcar pagos de dividendo">Div</button>
+          </div>
+          <span class="bb-chart-range" id="bbChartRange"></span>
+        </div>
+        <details class="bb-nav-drawer">
+          <summary>Pan, zoom y navegación temporal</summary>
+          <div class="bb-chart-nav">
+            <button type="button" class="bb-tool-btn" id="bbChartPanL" title="Ver fechas anteriores (←)">◀ Atrás</button>
+            <button type="button" class="bb-tool-btn" id="bbChartPanR" title="Ver fechas recientes (→)">Adelante ▶</button>
+            <button type="button" class="bb-tool-btn" id="bbChartZoomOut" title="Alejar (−)">− Zoom</button>
+            <button type="button" class="bb-tool-btn" id="bbChartZoomIn" title="Acercar (+)">+ Zoom</button>
+            <button type="button" class="bb-tool-btn" id="bbChartGoStart" title="Inicio (Home)">Inicio</button>
+            <button type="button" class="bb-tool-btn" id="bbChartGoEnd" title="Hoy (End)">Hoy</button>
+            <button type="button" class="bb-tool-btn" id="bbChartFit" title="Ver todo (F)">Ajustar</button>
+          </div>
+        </details>
+      </div>
+      <div class="bb-chart-stack">
+        <div class="bb-chart-container" id="bbChartWrap">
+          <div id="bbChartStatus" class="bb-chart-status"></div>
+          <div class="bb-ohlc" id="bbOhlc">
+            <span>O <b id="bbO">—</b></span>
+            <span>H <b id="bbH">—</b></span>
+            <span>L <b id="bbL">—</b></span>
+            <span>C <b id="bbC">—</b></span>
+            <span id="bbOhlcChg" class="bb-ohlc-chg"></span>
+          </div>
+          <div id="bbChart"></div>
+          <div class="bb-chart-hint">Arrastra para mover · Rueda para zoom · ← → para navegar</div>
+        </div>
+        <div class="bb-resize-handle bb-resize-row" id="bbResizeChart" title="Alto volumen"></div>
+        <div id="bbVolChart"></div>
+        <div class="bb-chart-container bb-rsi-wrap" id="bbRsiWrap" style="display:none"><div id="bbRsiChart" style="height:60px"></div></div>
+      </div>
+    </section>
+
+    <div class="bb-resize-handle bb-resize-col" id="bbResizeInfo" title="Ancho panel lateral"></div>
+
+    <div class="bb-rail" id="bbRail">
+    <aside class="bb-panel bb-watch">
+      <div class="bb-panel-head bb-panel-head--watch">
+        <h2 id="bbWatchTitle">Watchlist</h2>
+        <div class="bb-watch-head-actions">
+          <button type="button" class="bb-watch-follow-btn" id="bbWatchFollowBtn" title="Seguir / quitar emisora actual (W)" aria-pressed="false">☆</button>
+          <button type="button" class="bb-watch-port-toggle" id="bbWatchPortToggle" title="Mostrar u ocultar posiciones del portafolio en esta lista" aria-pressed="false">Pos</button>
+          <span class="bb-head-meta" id="bbWatchMeta">{{ term.catalog_count or 0 }} emisoras</span>
+        </div>
+      </div>
+      <input type="text" class="bb-watch-search" id="bbWatchSearch" placeholder="Buscar emisora…  ·  / en cualquier parte" aria-label="Buscar emisora">
       <div class="bb-watch-tabs bb-watch-tabs-market" id="bbWatchTabsMarket">
         <button type="button" class="bb-watch-tab active" data-board="all">Todo</button>
         <button type="button" class="bb-watch-tab" data-board="bmv">BMV</button>
@@ -110,105 +205,13 @@
       <div class="bb-panel-body" id="bbWatchlist"></div>
     </aside>
 
-    <div class="bb-resize-handle bb-resize-col" id="bbResizeWatch" title="Ancho watchlist"></div>
-
-    <section class="bb-panel bb-chart-area">
-      <div class="bb-panel-head bb-chart-head">
-        <h2>Gráfica</h2>
-        <div class="bb-symbol-block bb-symbol-block--compact" id="bbSymbolBlock">
-          <span class="bb-watch-logo-wrap" id="bbSymLogoWrap">
-            <img class="bb-watch-logo" id="bbSymLogo" src="/api/terminal/logo/{{ term.default_symbol or 'IPC' }}" alt=""
-              onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
-            <span class="bb-watch-logo-fb" aria-hidden="true">{{ (term.default_symbol or 'IPC')[:2] }}</span>
-          </span>
-          <span class="bb-symbol-name" id="bbSymName">{{ term.default_symbol or 'IPC' }}</span>
-          <span class="bb-symbol-price" id="bbSymPrice">—</span>
-          <span class="bb-symbol-chg" id="bbSymChg"></span>
-        </div>
-      </div>
-      <div class="bb-chart-toolbar">
-        <div class="bb-toolbar-row">
-          <span class="bb-toolbar-label">Navegar</span>
-          <div class="bb-chart-nav">
-            <button type="button" class="bb-tool-btn" id="bbChartPanL" title="Ver fechas anteriores (←)">◀</button>
-            <button type="button" class="bb-tool-btn" id="bbChartPanR" title="Ver fechas recientes (→)">▶</button>
-            <button type="button" class="bb-tool-btn" id="bbChartZoomOut" title="Alejar / más historia (−)">−</button>
-            <button type="button" class="bb-tool-btn" id="bbChartZoomIn" title="Acercar (+)">+</button>
-            <button type="button" class="bb-tool-btn" id="bbChartGoStart" title="Ir al inicio (Home)">Inicio</button>
-            <button type="button" class="bb-tool-btn" id="bbChartGoEnd" title="Ir al presente (End)">Hoy</button>
-            <button type="button" class="bb-tool-btn" id="bbChartFit" title="Ver todo el periodo (F)">⊡</button>
-          </div>
-          <span class="bb-chart-range" id="bbChartRange"></span>
-        </div>
-        <div class="bb-toolbar-row">
-          <span class="bb-toolbar-label">Periodo</span>
-          <div class="bb-periods" id="bbPeriods">
-            <button type="button" class="bb-period" data-period="1d" data-key="1">1D</button>
-            <button type="button" class="bb-period" data-period="5d" data-key="2">5D</button>
-            <button type="button" class="bb-period" data-period="1mo" data-key="3">1M</button>
-            <button type="button" class="bb-period" data-period="3mo" data-key="4">3M</button>
-            <button type="button" class="bb-period active" data-period="6mo" data-key="5">6M</button>
-            <button type="button" class="bb-period" data-period="1y" data-key="6">1A</button>
-            <button type="button" class="bb-period" data-period="2y" data-key="7">2A</button>
-            <button type="button" class="bb-period" data-period="5y" data-key="8">5A</button>
-            <button type="button" class="bb-period" data-period="10y" data-key="9">10A</button>
-            <button type="button" class="bb-period bb-period-max" data-period="max" data-key="0">MAX</button>
-          </div>
-        </div>
-        <div class="bb-toolbar-row">
-          <span class="bb-toolbar-label">Tipo</span>
-          <div class="bb-chart-types" id="bbChartTypes">
-            <button type="button" class="bb-tool-btn active" data-chart-type="candle" title="Velas japonesas">Velas</button>
-            <button type="button" class="bb-tool-btn" data-chart-type="line" title="Línea de cierre">Línea</button>
-            <button type="button" class="bb-tool-btn" data-chart-type="area" title="Área de cierre">Área</button>
-          </div>
-        </div>
-        <div class="bb-toolbar-row">
-          <span class="bb-toolbar-label">Indicadores</span>
-          <div class="bb-chart-tools">
-            <button type="button" class="bb-tool-btn active" id="bbToggleMA" title="Medias móviles 20/50">MA</button>
-            <button type="button" class="bb-tool-btn" id="bbToggleBB" title="Bandas de Bollinger">BB</button>
-            <button type="button" class="bb-tool-btn" id="bbToggleRSI" title="RSI 14">RSI</button>
-            <button type="button" class="bb-tool-btn" id="bbToggleLog" title="Escala logarítmica">Log</button>
-            <button type="button" class="bb-tool-btn" id="bbCompareBtn" title="C=vs IPC · Shift+C o clic derecho = varios">vs IPC</button>
-            <button type="button" class="bb-tool-btn active" id="bbToggleDiv" title="Marcar pagos de dividendo">Div</button>
-          </div>
-        </div>
-      </div>
-      <div class="bb-chart-stack">
-        <div class="bb-chart-container" id="bbChartWrap">
-          <div id="bbChartStatus" class="bb-chart-status"></div>
-          <div class="bb-ohlc" id="bbOhlc">
-            <span>O <b id="bbO">—</b></span>
-            <span>H <b id="bbH">—</b></span>
-            <span>L <b id="bbL">—</b></span>
-            <span>C <b id="bbC">—</b></span>
-            <span id="bbOhlcChg" class="bb-ohlc-chg"></span>
-          </div>
-          <div id="bbChart"></div>
-          <div class="bb-chart-hint">Arrastra para mover · Rueda para zoom · ← → para navegar</div>
-        </div>
-        <div class="bb-resize-handle bb-resize-row" id="bbResizeChart" title="Alto volumen"></div>
-        <div id="bbVolChart"></div>
-        <div class="bb-chart-container bb-rsi-wrap" id="bbRsiWrap" style="display:none"><div id="bbRsiChart" style="height:60px"></div></div>
-      </div>
-    </section>
-
-    <div class="bb-resize-handle bb-resize-col" id="bbResizeInfo" title="Ancho panel info"></div>
+    <div class="bb-resize-handle bb-resize-row" id="bbResizeRailWatch" title="Alto lista vs detalle"></div>
 
     <aside class="bb-panel bb-info-panel">
       <div class="bb-info-split">
-        <section class="bb-info-section bb-info-news">
-          <div class="bb-pane-subhead">
-            <span>Noticias</span>
-            <span id="bbNewsTag" class="bb-head-meta">MX</span>
-          </div>
-          <div class="bb-panel-body" id="bbNews"></div>
-        </section>
-        <div class="bb-resize-handle bb-resize-row" id="bbResizeNews" title="Alto noticias vs detalle"></div>
         <section class="bb-info-section bb-info-detail">
           <div class="bb-pane-subhead">
-            <span>Cotización</span>
+            <span>Estadísticas clave</span>
             <a href="/emisora/{{ term.default_symbol or 'IPC' }}" class="bb-analysis-link bb-analysis-link--inline" id="bbAnalysisLinkTop" hidden>Análisis →</a>
           </div>
           <div class="bb-panel-body bb-detail-body">
@@ -241,6 +244,14 @@
             <p class="bb-fin-na" id="bbFinNA" hidden>El análisis financiero no aplica a índices o divisas.</p>
           </div>
         </section>
+        <div class="bb-resize-handle bb-resize-row" id="bbResizeNews" title="Alto estadísticas vs noticias"></div>
+        <section class="bb-info-section bb-info-news">
+          <div class="bb-pane-subhead">
+            <span>Noticias</span>
+            <span id="bbNewsTag" class="bb-head-meta">MX</span>
+          </div>
+          <div class="bb-panel-body" id="bbNews"></div>
+        </section>
         <details class="bb-info-calendar-wrap">
           <summary>Calendario económico</summary>
           <div class="bb-panel-body" id="bbCalendar">
@@ -254,6 +265,23 @@
         </details>
       </div>
     </aside>
+    </div>
+    </div>
+
+    <div class="bb-invest-widgets-scroll" id="bbInvestWidgetsScroll" aria-label="Indicadores desplazables">
+    <section class="bb-widgets-deck bb-widgets-deck--bottom" id="bbWidgetsDeck" hidden aria-label="Indicadores de mercado">
+      <div class="bb-widgets-deck-head">
+        <div class="bb-widgets-deck-titles">
+          <h2 class="bb-widgets-title">Indicadores y datos de mercado</h2>
+          <p class="bb-widgets-deck-sub" id="bbWidgetsSub">Sincronizado con la emisora de la gráfica</p>
+        </div>
+        <span class="bb-widgets-source" id="bbWidgetsSource" title="Fuentes de datos">Yahoo · Google · TradingView</span>
+      </div>
+      <p class="bb-widgets-edit-hint">Modo ajustar (⊞ arriba o tecla L): arrastra ⋮⋮ · ½ / ⬌ ancho · esquina para alto · ✕ quitar · Reset restaura todo</p>
+      <p class="bb-widgets-status" id="bbWidgetsStatus" role="status" aria-live="polite"></p>
+      <div class="bb-widgets-grid" id="bbWidgetsGrid"></div>
+    </section>
+    </div>
 
     <section class="bb-panel bb-portfolio-panel">
       <div class="bb-pane-subhead">
@@ -283,7 +311,7 @@
         <div class="bb-pa-item" title="Peso de la posición más grande y número efectivo de posiciones"><span>Concentración</span><strong id="paTop">—</strong><small id="paEff"></small></div>
         <div class="bb-pa-item" title="Rendimiento después de comisiones de GBM"><span>Neto comisiones</span><strong id="paNet">—</strong><small id="paGross"></small></div>
       </div>
-      <div class="bb-alert-list" id="bbAlertList" hidden></div>
+      <div class="bb-alert-list" id="bbAlertas"><div id="bbAlertList" hidden></div></div>
       <div class="bb-panel-body bb-port-body-full" id="bbPortBody">
         <table class="bb-port-table" id="bbPortTable">
           <thead>
@@ -320,6 +348,13 @@
       </div>
     </section>
   </div>
+
+  <footer class="bb-news-ticker" id="bbNewsTicker" aria-label="Noticias en vivo">
+    <span class="bb-news-ticker-label">Noticias</span>
+    <div class="bb-news-ticker-viewport">
+      <div class="bb-news-ticker-track" id="bbNewsTickerTrack"></div>
+    </div>
+  </footer>
 </div>
 
 <div class="bb-kbd-overlay" id="bbPosModal">
@@ -380,7 +415,9 @@
       <dt>I</dt><dd>Vista Índices</dd>
       <dt>X</dt><dd>Vista Divisas</dd>
       <dt>P</dt><dd>Vista Mis posiciones</dd>
-      <dt>L</dt><dd>Modo ajustar paneles</dd>
+      <dt>W</dt><dd>Seguir / quitar emisora en lista</dd>
+      <dt>A</dt><dd>Análisis de la emisora</dd>
+      <dt>L</dt><dd>Modo ajustar paneles y widgets</dd>
       <dt>?</dt><dd>Ayuda</dd>
     </dl>
     <button type="button" class="bb-tool-btn" style="margin-top:.6rem" id="bbKbdClose">Cerrar</button>
@@ -390,14 +427,16 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/terminal.js?v={{ static_v.terminal_js }}"></script>
 <script src="/static/terminal-layout.js?v={{ static_v.terminal_layout_js }}"></script>
+<script src="/static/terminal-widgets-layout.js?v={{ static_v.terminal_widgets_layout_js }}"></script>
+<script src="/static/terminal.js?v={{ static_v.terminal_js }}"></script>
 <script>
 const _urlSym = new URLSearchParams(location.search).get('symbol');
 const BB_INIT = {
   symbol: _urlSym || {{ (data.terminal.default_symbol if data.terminal is defined else 'IPC') | tojson }},
   catalogCount: {{ (data.terminal.catalog_count if data.terminal is defined else 0) | tojson }},
   holdings: {{ (data.holdings or []) | tojson }},
+  watchlist: {{ (data.watchlist or []) | tojson }},
 };
 (function boot() {
   if (typeof initBloombergTerminal !== 'function') return;

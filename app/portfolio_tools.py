@@ -9,6 +9,7 @@ from typing import Any
 
 from app.catalog import get_symbol_meta
 from app.database import get_db
+from app.emisora_analysis import page_symbol_allowed
 from app.terminal import _now, _safe_float, get_live_quotes, get_portfolio_live
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,71 @@ def create_price_alert(symbol: str, direction: str, target: float) -> dict:
 def delete_price_alert(alert_id: int) -> bool:
     conn = get_db()
     cur = conn.execute("DELETE FROM price_alerts WHERE id = ?", (alert_id,))
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+def list_watchlist() -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT symbol, name, created_at FROM watchlist_symbols
+           ORDER BY sort_order ASC, created_at ASC"""
+    ).fetchall()
+    conn.close()
+    out: list[dict] = []
+    for r in rows:
+        sym = r["symbol"]
+        meta = get_symbol_meta(sym) or {}
+        out.append({
+            "symbol": sym,
+            "name": r["name"] or meta.get("name") or sym,
+            "board": meta.get("board"),
+            "kind": meta.get("kind"),
+            "created_at": r["created_at"],
+        })
+    return out
+
+
+def watchlist_symbols() -> list[str]:
+    return [i["symbol"] for i in list_watchlist()]
+
+
+def add_watchlist_symbol(symbol: str, name: str | None = None) -> dict:
+    sym = _norm(symbol)
+    if not sym:
+        raise ValueError("Falta el símbolo")
+    if not page_symbol_allowed(sym):
+        raise ValueError(f"Símbolo no válido: {sym}")
+    meta = get_symbol_meta(sym) or {}
+    display = (name or meta.get("name") or sym).strip()
+    conn = get_db()
+    conn.execute(
+        """INSERT INTO watchlist_symbols (symbol, name, created_at, sort_order)
+           VALUES (
+             ?, ?, ?,
+             COALESCE((SELECT MAX(sort_order) + 1 FROM watchlist_symbols), 0)
+           )
+           ON CONFLICT(symbol) DO UPDATE SET name = excluded.name""",
+        (sym, display, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {
+        "symbol": sym,
+        "name": display,
+        "board": meta.get("board"),
+        "kind": meta.get("kind"),
+    }
+
+
+def remove_watchlist_symbol(symbol: str) -> bool:
+    sym = _norm(symbol)
+    if not sym:
+        return False
+    conn = get_db()
+    cur = conn.execute("DELETE FROM watchlist_symbols WHERE symbol = ?", (sym,))
     conn.commit()
     ok = cur.rowcount > 0
     conn.close()

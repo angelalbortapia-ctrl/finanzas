@@ -36,8 +36,70 @@ const BB = {
   loading: false,
   catalogLoaded: false,
   alerts: [],
+  watchlistItems: [],
+  watchlist: null,
+  showWatchPortfolio: false,
+  _skipWatchQuoteSchedule: false,
   _loadId: 0,
 };
+
+const WATCH_PORTFOLIO_KEY = 'finanzas-watch-portfolio';
+let watchQuoteTimer;
+
+function visibleWatchlistSymbols() {
+  return [...document.querySelectorAll('#bbWatchlist .bb-watch-row[data-symbol]')]
+    .map((r) => r.dataset.symbol)
+    .filter(Boolean);
+}
+
+function scheduleWatchlistQuotes() {
+  if (!isStockWorkspace() || BB._skipWatchQuoteSchedule) return;
+  const syms = visibleWatchlistSymbols();
+  const needs = syms.length === 0
+    || syms.some((s) => {
+      const q = BB.prices[s];
+      return !q || q.price == null || q.change_pct == null;
+    });
+  if (!needs) return;
+  clearTimeout(watchQuoteTimer);
+  watchQuoteTimer = setTimeout(() => refreshLive(), 350);
+}
+
+function watchRowQuote(sym, fallback) {
+  const q = BB.prices[sym];
+  if (q && q.price != null) return q;
+  return fallback;
+}
+
+function formatWatchChg(sym, item) {
+  const q = watchRowQuote(sym, item);
+  if (!q || q.price == null) return { text: '—', cls: '' };
+  if (q.change_pct == null || Number.isNaN(q.change_pct)) return { text: '—', cls: '' };
+  const pct = q.change_pct;
+  return { text: bbPct(pct), cls: pct >= 0 ? 'up' : 'down' };
+}
+
+function watchPortfolioInSidebar() {
+  return !!BB.showWatchPortfolio;
+}
+
+function syncWatchPortToggleUI() {
+  const btn = document.getElementById('bbWatchPortToggle');
+  if (!btn) return;
+  btn.hidden = !isStockWorkspace();
+}
+
+function setWatchPortfolioInSidebar(on) {
+  BB.showWatchPortfolio = !!on;
+  try { localStorage.setItem(WATCH_PORTFOLIO_KEY, on ? '1' : '0'); } catch (_) {}
+  const btn = document.getElementById('bbWatchPortToggle');
+  if (btn) {
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.title = on ? 'Ocultar posiciones del portafolio' : 'Mostrar posiciones del portafolio';
+  }
+  renderWatchlist();
+}
 
 const INDICES_BOARD_ORDER = [
   { id: 'mx', title: 'México' },
@@ -113,6 +175,10 @@ function safeHttpUrl(u) {
   }
 }
 
+function bbStripUrlScheme(u) {
+  return String(u || '').replace(/^https?:\/\//i, '');
+}
+
 function bbFmt(n, dec = 2) {
   if (n == null || n === '' || isNaN(n)) return '—';
   if (Math.abs(n) >= 10000) return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -134,6 +200,372 @@ function bbFmtLarge(n, currency) {
   if (abs >= 1e6) return cur + (v / 1e6).toFixed(2) + 'M';
   if (abs >= 1e4) return cur + (v / 1e3).toFixed(1) + 'K';
   return bbFmt(v);
+}
+
+function bbNormSym(s) {
+  return (s || '').replace(/^BMV:/i, '').trim().toUpperCase();
+}
+
+function clearTradingViewEmbedHosts() {
+  document.querySelectorAll('.bb-tv-embed').forEach((host) => {
+    host.innerHTML = '';
+    delete host.dataset.tvLoaded;
+  });
+}
+
+function resetWidgetsForSymbol(symbol) {
+  BB._widgetsLoadId = (BB._widgetsLoadId || 0) + 1;
+  const sym = bbNormSym(symbol);
+  const deck = document.getElementById('bbWidgetsDeck');
+  const grid = document.getElementById('bbWidgetsGrid');
+  const status = document.getElementById('bbWidgetsStatus');
+  const title = document.querySelector('.bb-widgets-title');
+  clearTradingViewEmbedHosts();
+  if (grid) grid.innerHTML = '';
+  if (title) {
+    title.textContent = sym
+      ? `Indicadores — ${sym}`
+      : 'Indicadores y datos de mercado';
+  }
+  if (status) status.textContent = sym ? `Cargando ${sym}…` : '';
+  if (deck) {
+    deck.dataset.widgetSymbol = sym || '';
+    deck.classList.toggle('bb-widgets-loading', !!sym);
+  }
+  const sub = document.getElementById('bbWidgetsSub');
+  if (sub) {
+    sub.textContent = sym
+      ? `${sym} — mismos datos que la gráfica`
+      : 'Sincronizado con la emisora de la gráfica';
+  }
+}
+
+function bbSyncUrlSymbol(sym) {
+  try {
+    const n = bbNormSym(sym);
+    const url = new URL(location.href);
+    if (BB.workspace === 'market' && n && n !== 'IPC') url.searchParams.set('symbol', n);
+    else if (BB.workspace === 'market') url.searchParams.delete('symbol');
+    if (BB.workspace === 'market' && BB.compare) url.searchParams.set('compare', BB.compare);
+    else url.searchParams.delete('compare');
+    history.replaceState(null, '', url);
+  } catch (_) {}
+}
+
+function bbUpdateDataFreshness(text, stale) {
+  const el = document.getElementById('bbDataFresh');
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  el.textContent = text;
+  el.hidden = false;
+  el.classList.toggle('stale', !!stale);
+}
+
+function bbWidgetAnalystBars(counts) {
+  if (!counts) return '';
+  const rows = [
+    ['Compra fuerte', counts.strongBuy, '#2dd4a0'],
+    ['Compra', counts.buy, '#34d399'],
+    ['Mantener', counts.hold, '#8b95a8'],
+    ['Venta', counts.sell, '#f87171'],
+    ['Venta fuerte', counts.strongSell, '#ef5350'],
+  ];
+  const max = Math.max(1, ...rows.map(r => r[1] || 0));
+  return `<div class="bb-w-an-bars">${rows.map(([label, n, color]) => {
+    const w = ((n || 0) / max) * 100;
+    return `<div class="bb-w-an-row"><span>${escHtml(label)}</span>`
+      + `<div class="bb-w-an-track"><i style="width:${w}%;background:${color}"></i></div>`
+      + `<em>${n || 0}</em></div>`;
+  }).join('')}</div>`;
+}
+
+function renderWidgets(data, forSymbol, widgetsLoadId) {
+  const deck = document.getElementById('bbWidgetsDeck');
+  const grid = document.getElementById('bbWidgetsGrid');
+  const status = document.getElementById('bbWidgetsStatus');
+  const src = document.getElementById('bbWidgetsSource');
+  if (!deck || !grid) return;
+
+  const sym = bbNormSym(forSymbol || data?.symbol);
+  if (widgetsLoadId != null && widgetsLoadId !== BB._widgetsLoadId) return;
+  if (sym && sym !== bbNormSym(BB.symbol)) return;
+  if (data?.symbol && bbNormSym(data.symbol) !== sym) return;
+
+  if (!data || data.error) {
+    deck.hidden = false;
+    deck.classList.remove('bb-widgets-loading');
+    grid.innerHTML = '';
+    if (status) status.textContent = data?.error || 'No se pudieron cargar los indicadores';
+    return;
+  }
+  if (!data.applicable) {
+    deck.hidden = true;
+    deck.classList.remove('bb-widgets-loading');
+    grid.innerHTML = '';
+    if (status) status.textContent = '';
+    return;
+  }
+
+  deck.hidden = false;
+  deck.dataset.widgetSymbol = sym;
+  const title = document.querySelector('.bb-widgets-title');
+  if (title) title.textContent = `Indicadores — ${sym}`;
+  if (status) status.textContent = '';
+  deck.classList.remove('bb-widgets-loading');
+  if (src) {
+    src.textContent = Array.isArray(data.sources) ? data.sources.join(' · ') : (data.source || 'Yahoo · Google · TradingView');
+  }
+  const warn = (data.warnings || []).filter(Boolean);
+  if (status && warn.length) {
+    status.textContent = warn.join(' · ');
+    status.classList.add('bb-widgets-warn');
+  } else if (status) {
+    status.classList.remove('bb-widgets-warn');
+  }
+
+  const cur = data.currency || 'MXN';
+  const stats = data.statistics || [];
+  const an = data.analysts;
+  const earn = data.earnings || {};
+  const earnRows = (earn.quarterly || []).slice(-6).reverse();
+  const div = data.dividends || {};
+  const divHist = (div.history || []).slice(-8).reverse();
+  const qTrends = data.income_trends?.quarterly;
+
+  let html = '';
+
+  if (an) {
+    const upside = an.upside_pct != null ? bbPct(an.upside_pct) : '—';
+    const upsideCls = (an.upside_pct || 0) >= 0 ? 'up' : 'down';
+    html += `<article class="bb-widget-card bb-widget-analysts" data-widget-id="analysts">
+      <h3>Analistas <span class="bb-widget-tag">Yahoo</span></h3>
+      <div class="bb-w-an-hero">
+        <div><span>Consenso</span><strong>${escHtml(an.recommendation || an.recommendation_key || '—')}</strong></div>
+        <div><span>Objetivo medio</span><strong>${bbFmt(an.target_mean)}</strong></div>
+        <div><span>Potencial</span><strong class="${upsideCls}">${upside}</strong></div>
+        <div><span>Rango</span><strong>${bbFmt(an.target_low)} – ${bbFmt(an.target_high)}</strong></div>
+      </div>
+      ${bbWidgetAnalystBars(an.counts)}
+      <p class="bb-widget-foot">${an.count ? `${an.count} analistas` : 'Datos de consenso Yahoo Finance'}</p>
+    </article>`;
+  }
+
+  if (stats.length) {
+    html += `<article class="bb-widget-card bb-widget-stats" data-widget-id="stats">
+      <h3>Valoración y ratios</h3>
+      <div class="bb-w-stat-grid">${stats.map(s => `
+        <div class="bb-w-stat"><span>${escHtml(s.label)}</span><strong>${escHtml(s.value)}</strong></div>
+      `).join('')}</div>
+    </article>`;
+  }
+
+  if (earnRows.length) {
+    html += `<article class="bb-widget-card bb-widget-earnings" data-widget-id="earnings">
+      <h3>Utilidades por acción</h3>
+      ${earn.next_report_date ? `<p class="bb-widget-note">Próximo reporte: ${escHtml(earn.next_report_date)}</p>` : ''}
+      <div class="bb-widget-table-scroll"><table class="bb-w-table"><thead><tr>
+        <th>Periodo</th><th class="num">Reportado</th><th class="num">Estimado</th><th class="num">Sorpresa</th>
+      </tr></thead><tbody>${earnRows.map(r => {
+        const surp = r.surprise_pct != null ? bbPct(r.surprise_pct) : '—';
+        const surpCls = (r.surprise_pct || 0) >= 0 ? 'up' : 'down';
+        return `<tr>
+          <td>${escHtml(r.period || r.date || '—')}</td>
+          <td class="num">${bbFmtRatio(r.reported_eps, 2)}</td>
+          <td class="num">${bbFmtRatio(r.estimate_eps, 2)}</td>
+          <td class="num ${surpCls}">${surp}</td>
+        </tr>`;
+      }).join('')}</tbody></table></div>
+    </article>`;
+  }
+
+  html += `<article class="bb-widget-card bb-widget-dividends" data-widget-id="dividends">
+    <h3>Dividendos</h3>
+    <div class="bb-w-div-summary">
+      <div><span>Rendimiento</span><strong>${div.yield_pct != null ? `${Number(div.yield_pct).toFixed(2)}%` : '—'}</strong></div>
+      <div><span>Tasa anual</span><strong>${div.rate != null ? bbFmt(div.rate) : '—'}</strong></div>
+      <div><span>Ex-dividendo</span><strong>${escHtml(div.ex_date || '—')}</strong></div>
+    </div>
+    ${divHist.length ? `<div class="bb-widget-table-scroll"><table class="bb-w-table bb-w-table--compact"><thead><tr><th>Fecha</th><th class="num">Monto</th></tr></thead><tbody>
+      ${divHist.map(d => `<tr><td>${escHtml(d.date)}</td><td class="num">${bbFmtRatio(d.amount, 4)}</td></tr>`).join('')}
+    </tbody></table></div>` : '<p class="bb-widget-foot">Sin historial de pagos en Yahoo.</p>'}
+  </article>`;
+
+  if (qTrends?.revenue?.length) {
+    const rev = qTrends.revenue.slice(-4);
+    const periods = rev.map(r => r.period);
+    const niMap = Object.fromEntries((qTrends.net_income || []).map(x => [x.period, x.value]));
+    html += `<article class="bb-widget-card bb-widget-trends" data-widget-id="trends">
+      <h3>Ingresos trimestrales</h3>
+      <div class="bb-widget-table-scroll"><table class="bb-w-table"><thead><tr><th>Concepto</th>
+        ${periods.map(p => `<th class="num">${escHtml(p)}</th>`).join('')}
+      </tr></thead><tbody>
+        <tr><td>Ingresos</td>${rev.map(r => `<td class="num">${bbFmtLarge(r.value, cur)}</td>`).join('')}</tr>
+        <tr><td>Utilidad neta</td>${periods.map(p => {
+          const v = niMap[p];
+          return `<td class="num">${v != null ? bbFmtLarge(v, cur) : '—'}</td>`;
+        }).join('')}</tr>
+      </tbody></table></div>
+    </article>`;
+  }
+
+  const gNews = data.google_news || [];
+  if (gNews.length) {
+    html += `<article class="bb-widget-card bb-widget-google" data-widget-id="google-news">
+      <h3>Noticias <span class="bb-widget-tag bb-widget-tag--google">Google</span></h3>
+      <ul class="bb-w-news-list">${gNews.map(n => {
+        const title = escHtml((n.title || '').trim());
+        const url = safeHttpUrl(n.url);
+        const pub = escHtml((n.published_at || '').slice(0, 16).replace('T', ' '));
+        const src = escHtml(n.publisher || n.tag || 'Google');
+        return `<li><a href="${url}" target="_blank" rel="noopener noreferrer" title="${title}">
+          <span class="bb-w-news-meta">${pub ? `${pub} · ` : ''}${src}</span>
+          <span class="bb-w-news-title">${title}</span>
+        </a></li>`;
+      }).join('')}</ul>
+    </article>`;
+  }
+
+  const health = data.health;
+  if (health?.checks?.length) {
+    html += `<article class="bb-widget-card bb-widget-health" data-widget-id="health">
+      <h3>Salud financiera <span class="bb-widget-tag">Yahoo</span></h3>
+      <p class="bb-widget-note">${health.passed}/${health.total} criterios favorables</p>
+      <ul class="bb-w-health-list">${health.checks.map(c => `
+        <li class="${c.ok ? 'ok' : 'bad'}"><span>${escHtml(c.label)}</span><em>${escHtml(c.value)}</em></li>
+      `).join('')}</ul>
+    </article>`;
+  }
+
+  const prof = data.profile;
+  if (prof && (prof.summary || prof.sector)) {
+    html += `<article class="bb-widget-card bb-widget-profile" data-widget-id="profile">
+      <h3>Perfil <span class="bb-widget-tag">Yahoo</span></h3>
+      ${prof.sector ? `<p class="bb-widget-note">${escHtml(prof.sector)}${prof.industry ? ` · ${escHtml(prof.industry)}` : ''}</p>` : ''}
+      ${prof.summary ? `<p class="bb-w-profile-text">${escHtml(prof.summary)}</p>` : ''}
+      ${prof.website ? `<a class="bb-w-profile-link" href="${safeHttpUrl(prof.website)}" target="_blank" rel="noopener noreferrer">${escHtml(bbStripUrlScheme(prof.website))}</a>` : ''}
+    </article>`;
+  }
+
+  const margins = data.margins_quarterly || [];
+  if (margins.length) {
+    html += `<article class="bb-widget-card bb-widget-margins" data-widget-id="margins">
+      <h3>Margen neto trimestral <span class="bb-widget-tag">Yahoo</span></h3>
+      <div class="bb-w-margin-row">${margins.map(m => `
+        <div class="bb-w-margin"><span>${escHtml(m.period)}</span><strong>${m.value != null ? `${Number(m.value).toFixed(1)}%` : '—'}</strong></div>
+      `).join('')}</div>
+    </article>`;
+  }
+
+  const tv = data.tradingview;
+  if (tv?.metrics?.length) {
+    html += `<article class="bb-widget-card bb-widget-tv-scan" data-widget-id="tv-scan">
+      <h3>Técnico <span class="bb-widget-tag bb-widget-tag--tv">TradingView</span></h3>
+      <p class="bb-widget-note">${escHtml(tv.tv_symbol || '')}</p>
+      <div class="bb-w-stat-grid">${tv.metrics.map(m => `
+        <div class="bb-w-stat"><span>${escHtml(m.label)}</span><strong>${escHtml(m.value)}</strong></div>
+      `).join('')}</div>
+    </article>`;
+  }
+
+  if (tv?.tv_symbol && (tv.applicable || tv.embed_ok)) {
+    html += `<article class="bb-widget-card bb-widget-tv-tech" data-widget-id="tv-technical">
+      <h3>Análisis técnico <span class="bb-widget-tag bb-widget-tag--tv">TradingView</span></h3>
+      <div class="bb-tv-embed" id="bbTvTechEmbed" data-tv-symbol="${escHtml(tv.tv_symbol)}"></div>
+    </article>`;
+    if (tv.embed_ok !== false && !String(tv.tv_symbol).startsWith('BMV:')) {
+      html += `<article class="bb-widget-card bb-widget-tv-info" data-widget-id="tv-symbol">
+        <h3>Ficha <span class="bb-widget-tag bb-widget-tag--tv">TradingView</span></h3>
+        <div class="bb-tv-embed bb-tv-embed--tall" id="bbTvSymbolEmbed" data-tv-symbol="${escHtml(tv.tv_symbol)}"></div>
+      </article>`;
+    }
+  }
+
+  grid.innerHTML = html || '<p class="bb-widget-foot">Sin datos adicionales para esta emisora.</p>';
+  if (typeof bbRefreshWidgetsLayout === 'function') bbRefreshWidgetsLayout();
+  mountTradingViewEmbeds(tv?.tv_symbol, widgetsLoadId, sym);
+}
+
+function mountTradingViewEmbeds(tvSymbol, widgetsLoadId, forSymbol) {
+  if (!tvSymbol) return;
+  if (widgetsLoadId != null && widgetsLoadId !== BB._widgetsLoadId) return;
+  if (forSymbol && bbNormSym(forSymbol) !== bbNormSym(BB.symbol)) return;
+  const techHost = document.getElementById('bbTvTechEmbed');
+  const symHost = document.getElementById('bbTvSymbolEmbed');
+  const load = (host, src, cfg) => {
+    if (!host) return;
+    host.innerHTML = '';
+    host.dataset.tvLoaded = tvSymbol;
+    const wrap = document.createElement('div');
+    wrap.className = 'tradingview-widget-container';
+    wrap.style.height = '100%';
+    const inner = document.createElement('div');
+    inner.className = 'tradingview-widget-container__widget';
+    wrap.appendChild(inner);
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = src;
+    script.async = true;
+    script.text = JSON.stringify({ ...cfg, symbol: tvSymbol });
+    wrap.appendChild(script);
+    host.appendChild(wrap);
+  };
+  load(techHost, 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js', {
+    interval: '1D',
+    width: '100%',
+    height: 425,
+    isTransparent: true,
+    showIntervalTabs: true,
+    locale: 'es',
+    colorTheme: 'dark',
+  });
+  load(symHost, 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js', {
+    width: '100%',
+    height: 520,
+    locale: 'es',
+    colorTheme: 'dark',
+    isTransparent: true,
+  });
+}
+
+async function loadWidgets(symbol, opts = {}) {
+  const reqSym = bbNormSym(symbol || BB.symbol);
+  const loadId = opts.loadId != null ? opts.loadId : BB._widgetsLoadId;
+  const deck = document.getElementById('bbWidgetsDeck');
+  if (!deck || !isStockWorkspace()) {
+    if (deck) {
+      deck.hidden = true;
+      deck.dataset.widgetSymbol = '';
+    }
+    clearTradingViewEmbedHosts();
+    return;
+  }
+  const status = document.getElementById('bbWidgetsStatus');
+  deck.hidden = false;
+  if (!opts.skipReset) {
+    resetWidgetsForSymbol(reqSym);
+  }
+  const activeLoadId = BB._widgetsLoadId;
+  if (status) status.textContent = `Cargando ${reqSym}…`;
+  try {
+    const res = await fetch(
+      `/api/terminal/widgets?symbol=${encodeURIComponent(reqSym)}&v=${activeLoadId}`,
+      { cache: 'no-store' },
+    );
+    if (activeLoadId !== BB._widgetsLoadId || reqSym !== bbNormSym(BB.symbol)) return;
+    const data = await res.json();
+    if (activeLoadId !== BB._widgetsLoadId || reqSym !== bbNormSym(BB.symbol)) return;
+    if (data.symbol && bbNormSym(data.symbol) !== reqSym) return;
+    renderWidgets(data, reqSym, activeLoadId);
+  } catch (_) {
+    deck.classList.remove('bb-widgets-loading');
+    if (activeLoadId === BB._widgetsLoadId && reqSym === bbNormSym(BB.symbol) && status) {
+      status.textContent = 'Error al cargar widgets';
+    }
+  }
 }
 
 function bbFmtRatio(n, dec = 2) {
@@ -167,6 +599,7 @@ const BB_CHART_FONT = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
 function measureChartSize() {
   const stack = document.querySelector('.bb-chart-stack');
   const chartEl = document.getElementById('bbChart');
+  const wrap = document.getElementById('bbChartWrap');
   const volEl = document.getElementById('bbVolChart');
   const rsiWrap = document.getElementById('bbRsiWrap');
   const grid = document.getElementById('bbGrid');
@@ -179,7 +612,12 @@ function measureChartSize() {
   }
   volH = Math.max(40, volH);
   const rsiH = rsiWrap && rsiWrap.style.display !== 'none' ? (rsiWrap.offsetHeight || 60) : 0;
-  const h = Math.max(180, stack.clientHeight - volH - rsiH - 2);
+  const wrapH = wrap && wrap.clientHeight > 0 ? wrap.clientHeight : 0;
+  const stackH = stack.clientHeight || 0;
+  const h = Math.max(
+    260,
+    wrapH > 0 ? wrapH - 2 : (stackH > 80 ? stackH - volH - rsiH - 2 : 360),
+  );
   return { w, h, volH };
 }
 
@@ -212,22 +650,22 @@ function chartOpts(height) {
     width: w,
     height: height || h,
     layout: {
-      background: { color: '#07090e' },
-      textColor: '#6d7788',
+      background: { color: '#030406' },
+      textColor: '#64748b',
       fontFamily: BB_CHART_FONT,
       fontSize: 11,
     },
     grid: {
-      vertLines: { color: 'rgba(22,28,40,0.55)' },
-      horzLines: { color: 'rgba(22,28,40,0.85)' },
+      vertLines: { color: 'rgba(28, 36, 51, 0.45)' },
+      horzLines: { color: 'rgba(28, 36, 51, 0.65)' },
     },
     crosshair: {
       mode: crosshairMode,
-      vertLine: { color: 'rgba(212,168,83,0.35)', width: 1, style: 2, labelBackgroundColor: '#b8923f' },
-      horzLine: { color: 'rgba(212,168,83,0.35)', width: 1, style: 2, labelBackgroundColor: '#b8923f' },
+      vertLine: { color: 'rgba(56, 189, 248, 0.45)', width: 1, style: 2, labelBackgroundColor: '#0e7490' },
+      horzLine: { color: 'rgba(56, 189, 248, 0.45)', width: 1, style: 2, labelBackgroundColor: '#0e7490' },
     },
     rightPriceScale: {
-      borderColor: '#161c28',
+      borderColor: '#1c2433',
       mode: scaleMode,
       scaleMargins: { top: 0.06, bottom: 0.06 },
     },
@@ -541,7 +979,7 @@ function renderCharts(data) {
     BB.priceSeries.setData(closes);
   } else {
     BB.candleSeries = BB.chart.addCandlestickSeries({
-      upColor: '#2dd4a0', downColor: '#ef5350',
+      upColor: '#34d399', downColor: '#fb7185',
       borderUpColor: '#2dd4a0', borderDownColor: '#ef5350',
       wickUpColor: '#2dd4a0', wickDownColor: '#ef5350',
     });
@@ -685,7 +1123,10 @@ function updateSymbolHeader(quote, chartData) {
     };
   }
   name.textContent = sym;
-  if (desc) desc.textContent = quote?.name || chartData?.name || meta?.name || '';
+  const company = quote?.name || chartData?.name || meta?.name || '';
+  if (desc) desc.textContent = company;
+  const chartDesc = document.getElementById('bbChartSymDesc');
+  if (chartDesc) chartDesc.textContent = company;
   const p = quote?.price ?? chartData?.last;
   const pct = quote?.change_pct ?? chartData?.change_pct ?? 0;
   price.textContent = formatQuotePrice(p, kind);
@@ -696,7 +1137,6 @@ function updateSymbolHeader(quote, chartData) {
   const dPrice = document.getElementById('bbDetailPrice');
   const dChg = document.getElementById('bbDetailChg');
   const dMeta = document.getElementById('bbDetailMeta');
-  const company = quote?.name || chartData?.name || meta?.name || '';
   if (dName) dName.textContent = company || sym;
   if (dMeta) {
     const parts = [sym];
@@ -737,10 +1177,15 @@ function updateAnalysisLink(symbol, quote) {
   const cta = document.getElementById('bbAnalysisCta');
   const link = document.getElementById('bbAnalysisLink');
   const linkTop = document.getElementById('bbAnalysisLinkTop');
+  const heroLink = document.getElementById('bbHeroAnalyze');
   const naEl = document.getElementById('bbFinNA');
   const applicable = quote && !quote.error && quote.fundamentals_applicable !== false;
 
   if (link) link.href = url;
+  if (heroLink) {
+    heroLink.href = url;
+    heroLink.hidden = !applicable;
+  }
   if (linkTop) {
     linkTop.href = url;
     linkTop.hidden = !applicable;
@@ -764,6 +1209,18 @@ function clearTicker() {
   if (track) track.innerHTML = '';
 }
 
+/** Carga emisora en gráfica + widgets (fuerza vista Mercado si aplica). */
+function bbPickSymbol(symbol, period) {
+  const sym = bbNormSym(symbol);
+  if (!sym) return;
+  const ws = BB.workspace;
+  if ((ws === 'portfolio' || ws === 'market') && !isIndexSymbol(sym) && !isFxSymbol(sym)) {
+    if (ws !== 'market') switchWorkspace('market');
+  }
+  loadSymbol(sym, period);
+}
+window.bbPickSymbol = bbPickSymbol;
+
 async function loadSymbol(symbol, period) {
   const loadId = ++BB._loadId;
   const ws = BB.workspace;
@@ -783,6 +1240,17 @@ async function loadSymbol(symbol, period) {
 
   BB.symbol = symbol || BB.symbol;
   BB.period = period || BB.period;
+  const reqSymEarly = bbNormSym(BB.symbol);
+  if (ws === 'market') {
+    bbSyncUrlSymbol(BB.symbol);
+    resetWidgetsForSymbol(reqSymEarly);
+    loadWidgets(reqSymEarly, { loadId: BB._widgetsLoadId, skipReset: true });
+  } else {
+    resetWidgetsForSymbol(null);
+    const wDeck = document.getElementById('bbWidgetsDeck');
+    if (wDeck) wDeck.hidden = true;
+    clearTradingViewEmbedHosts();
+  }
   if (ws === 'indices') {
     BB.indicesSymbol = BB.symbol;
     BB.showDiv = false;
@@ -833,6 +1301,13 @@ async function loadSymbol(symbol, period) {
       BB.lastChartData = chartData;
       if (chartData.period) BB.period = chartData.period;
       renderCharts(chartData);
+      if (chartData.stale) {
+        bbUpdateDataFreshness('Gráfica · datos en caché', true);
+      } else if (chartData.source) {
+        bbUpdateDataFreshness(`Gráfica · ${chartData.source}`, false);
+      } else {
+        bbUpdateDataFreshness('Gráfica · Yahoo', false);
+      }
     }
 
     const quoteRes = await fetch(`/api/terminal/quote?symbol=${encodeURIComponent(reqSym)}`);
@@ -845,9 +1320,10 @@ async function loadSymbol(symbol, period) {
       .then(r => r.json())
       .then(news => {
         if (loadId !== BB._loadId || reqSym !== BB.symbol) return;
-        renderNews(news.items || []);
+        renderNews(news.items || [], reqSym);
         const newsTag = document.getElementById('bbNewsTag');
         if (newsTag) newsTag.textContent = reqSym;
+        scheduleNewsTickerRefresh();
       })
       .catch(() => {});
 
@@ -857,17 +1333,27 @@ async function loadSymbol(symbol, period) {
     document.querySelectorAll('.bb-period').forEach(b => {
       b.classList.toggle('active', b.dataset.period === BB.period);
     });
-    const cmd = document.getElementById('bbCommand');
-    if (cmd) cmd.value = BB.symbol;
+    const chartSearch = document.getElementById('bbChartSearch');
+    if (chartSearch && document.activeElement !== chartSearch) chartSearch.value = '';
+    updateWatchFollowBtn();
+    if (BB.workspace === 'market') {
+      const symNow = bbNormSym(BB.symbol);
+      const deck = document.getElementById('bbWidgetsDeck');
+      if (symNow && deck && bbNormSym(deck.dataset.widgetSymbol) !== symNow) {
+        loadWidgets(symNow, { skipReset: true });
+      }
+    }
   } catch (err) {
     if (loadId === BB._loadId && statusEl) statusEl.textContent = 'Error al cargar gráfica';
-    setChartLoading(false);
+  } finally {
+    if (loadId === BB._loadId) setChartLoading(false);
   }
 }
 
-function renderNews(items) {
+function renderNews(items, forSymbol) {
   const el = document.getElementById('bbNews');
   if (!el) return;
+  if (forSymbol && bbNormSym(forSymbol) !== bbNormSym(BB.symbol)) return;
   el.innerHTML = (items || []).map(n => `
     <a href="${safeHttpUrl(n.url)}" class="bb-news-item bb-enter" target="_blank" rel="noopener noreferrer">
       <div class="bb-news-meta">${escHtml((n.published_at || '').slice(0, 16).replace('T', ' '))} · ${escHtml(n.publisher)}</div>
@@ -893,6 +1379,67 @@ function logoHtml(symbol, extraCls = '') {
   </span>`;
 }
 
+function isStockWorkspace() {
+  return BB.workspace === 'market' || BB.workspace === 'portfolio';
+}
+
+function updateWatchFollowBtn() {
+  const btn = document.getElementById('bbWatchFollowBtn');
+  if (!btn) return;
+  const sym = (BB.symbol || '').replace('BMV:', '').toUpperCase();
+  const can = isStockWorkspace() && sym && sym !== 'IPC';
+  const on = can && BB.watchlist?.has(sym);
+  btn.textContent = on ? '★' : '☆';
+  btn.classList.toggle('active', !!on);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.disabled = !can;
+  btn.title = on ? 'Quitar de seguimiento (W)' : 'Agregar a seguimiento (W)';
+}
+
+async function addToWatchlist(symbol, name) {
+  const sym = (symbol || '').replace('BMV:', '').trim().toUpperCase();
+  if (!sym) return;
+  try {
+    const res = await fetch('/api/terminal/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol: sym, name: name || undefined }),
+    });
+    if (!res.ok) return;
+    const item = await res.json();
+    const idx = BB.watchlistItems.findIndex(i => i.symbol === item.symbol);
+    if (idx >= 0) BB.watchlistItems[idx] = item;
+    else BB.watchlistItems.push(item);
+    BB.watchlist.add(item.symbol);
+    updateWatchFollowBtn();
+    renderWatchlist();
+    refreshLive();
+    scheduleNewsTickerRefresh();
+  } catch (_) {}
+}
+
+async function removeFromWatchlist(symbol) {
+  const sym = (symbol || '').replace('BMV:', '').trim().toUpperCase();
+  if (!sym) return;
+  try {
+    const res = await fetch(`/api/terminal/watchlist/${encodeURIComponent(sym)}`, { method: 'DELETE' });
+    if (!res.ok) return;
+    BB.watchlistItems = BB.watchlistItems.filter(i => i.symbol !== sym);
+    BB.watchlist.delete(sym);
+    updateWatchFollowBtn();
+    renderWatchlist();
+    refreshLive();
+    scheduleNewsTickerRefresh();
+  } catch (_) {}
+}
+
+async function toggleWatchlistCurrent() {
+  const sym = (BB.symbol || '').replace('BMV:', '').toUpperCase();
+  if (!sym || sym === 'IPC' || !isStockWorkspace()) return;
+  if (BB.watchlist?.has(sym)) await removeFromWatchlist(sym);
+  else await addToWatchlist(sym);
+}
+
 function activeWatchBoard() {
   const tabsId = BB.workspace === 'indices'
     ? 'bbWatchTabsIndices'
@@ -915,18 +1462,63 @@ function renderWatchlist(items) {
   if (isFx) items = null;
   else if (isIndices) items = null;
 
+  const searching = q.length >= 2;
   let list = isIndices ? (BB.indicesCatalog || []).filter(i => i.kind === 'index')
     : isFx ? fxCatalogList()
       : (items || BB.catalog);
-  if (board !== 'all') list = list.filter(i => i.board === board);
+  if (!searching && isStockWorkspace() && items == null) {
+    list = board === 'all' ? [] : list.filter(i => i.board === board).slice(0, 24);
+  } else if (!searching && board !== 'all') {
+    list = list.filter(i => i.board === board);
+  }
   if (q) list = list.filter(i => i.symbol.includes(q) || (i.name || '').toUpperCase().includes(q));
   list = list.slice(0, 80);
 
-  const holdings = (isIndices || isFx) ? [] : (window.BB_INIT?.holdings || []);
+  const allHoldings = (isIndices || isFx) ? [] : (window.BB_INIT?.holdings || []);
+  const showPort = watchPortfolioInSidebar() && isStockWorkspace();
+  const holdings = !showPort ? [] : (q
+    ? allHoldings.filter(h => {
+      const sym = (h.ticker || '').replace('BMV:', '').toUpperCase();
+      return sym.includes(q) || (h.name || '').toUpperCase().includes(q);
+    })
+    : allHoldings);
+  const holdingSyms = new Set(
+    (showPort ? holdings : allHoldings).map(h => (h.ticker || '').replace('BMV:', '').toUpperCase()),
+  );
+  list = list.filter(i => !holdingSyms.has(i.symbol));
+
+  let followList = isStockWorkspace() ? [...(BB.watchlistItems || [])] : [];
+  if (!searching && board !== 'all') {
+    followList = followList.filter(i => !i.board || i.board === board);
+  }
+  if (q) {
+    followList = followList.filter(i => i.symbol.includes(q) || (i.name || '').toUpperCase().includes(q));
+  }
+  const followSyms = new Set(followList.map(i => i.symbol));
+  list = list.filter(i => !followSyms.has(i.symbol));
 
   let html = '';
+  if (followList.length) {
+    html += `<div class="bb-watch-divider bb-watch-divider--follow">Seguimiento · ${followList.length}</div>`;
+  }
+  const renderFollowRow = (i) => {
+    const pr = watchRowQuote(i.symbol, i);
+    const chg = formatWatchChg(i.symbol, i);
+    const price = pr?.price != null ? formatQuotePrice(pr.price, i.kind || pr.kind) : '';
+    return `<div class="bb-watch-row-wrap">
+      <button type="button" class="bb-watch-row ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}" data-board="${escHtml(i.board || '')}">
+        ${logoHtml(i.symbol)}
+        <span class="bb-watch-sym">${escHtml(i.symbol)}</span>
+        <span class="bb-watch-name">${escHtml((i.name || '').slice(0, 16))}</span>
+        <span class="bb-watch-right"><span class="bb-watch-price">${price || '—'}</span><span class="bb-watch-chg ${chg.cls}">${chg.text}</span></span>
+      </button>
+      <button type="button" class="bb-watch-action bb-watch-action--rm" data-watch-rm="${escHtml(i.symbol)}" title="Quitar de seguimiento">×</button>
+    </div>`;
+  };
+  followList.forEach(i => { html += renderFollowRow(i); });
+
   if (holdings.length) {
-    html += '<div class="bb-watch-divider">Portafolio</div>';
+    html += `<div class="bb-watch-divider bb-watch-divider--port">${searching ? 'En tu portafolio' : 'Portafolio'}</div>`;
     holdings.forEach(h => {
       const sym = (h.ticker || '').replace('BMV:', '');
       const pnl = h.pnl || 0;
@@ -937,21 +1529,44 @@ function renderWatchlist(items) {
         <span class="bb-watch-right"><span class="bb-watch-chg ${pnl >= 0 ? 'up' : 'down'}">${bbFmt(pnl)}</span></span>
       </button>`;
     });
-    html += '<div class="bb-watch-divider">Mercado</div>';
+  }
+  if (list.length) {
+    html += `<div class="bb-watch-divider">${searching ? 'Resultados' : 'Mercado'}</div>`;
+  } else if (searching && !holdings.length) {
+    html += '<p class="bb-watch-empty">Sin coincidencias — prueba el ticker o nombre en inglés</p>';
+  } else if (searching) {
+    html += '<p class="bb-watch-empty">Nada más en catálogo para esta búsqueda</p>';
+  } else if (isStockWorkspace() && board === 'all' && !followList.length && !holdings.length) {
+    html += '<p class="bb-watch-empty">Escribe para buscar · <strong>/</strong> paleta · <strong>W</strong> seguir emisora en gráfica</p>';
   }
 
   const renderRow = (i) => {
-    const pr = BB.prices[i.symbol] || i;
-    const pct = pr?.change_pct ?? 0;
-    const price = pr?.price != null ? formatQuotePrice(pr.price, i.kind) : '';
+    const pr = watchRowQuote(i.symbol, i);
+    const chg = formatWatchChg(i.symbol, i);
+    const price = pr?.price != null ? formatQuotePrice(pr.price, i.kind || pr.kind) : '';
     const rowCls = isIndices ? 'bb-watch-row--index' : (isFx ? 'bb-watch-row--fx' : '');
     const badge = (isIndices || isFx) && i.board
       ? `<span class="bb-watch-badge bb-watch-badge--${i.board}">${(i.board_title || i.board).slice(0, 4)}</span>` : '';
+    const canFollow = isStockWorkspace() && !BB.watchlist?.has(i.symbol);
+    const addBtn = canFollow
+      ? `<button type="button" class="bb-watch-action bb-watch-action--add" data-watch-add="${escHtml(i.symbol)}" data-watch-name="${escHtml(i.name || '')}" title="Agregar a seguimiento">☆</button>`
+      : '';
+    if (addBtn) {
+      return `<div class="bb-watch-row-wrap">
+        <button type="button" class="bb-watch-row ${rowCls} ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}" data-board="${escHtml(i.board)}">
+          ${logoHtml(i.symbol)}
+          <span class="bb-watch-sym">${badge}${escHtml(i.symbol)}</span>
+          <span class="bb-watch-name">${escHtml((i.name || '').slice(0, 16))}</span>
+          <span class="bb-watch-right"><span class="bb-watch-price">${price || '—'}</span><span class="bb-watch-chg ${chg.cls}">${chg.text}</span></span>
+        </button>
+        ${addBtn}
+      </div>`;
+    }
     return `<button type="button" class="bb-watch-row ${rowCls} ${i.symbol === BB.symbol ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}" data-board="${escHtml(i.board)}">
       ${logoHtml(i.symbol)}
       <span class="bb-watch-sym">${badge}${escHtml(i.symbol)}</span>
       <span class="bb-watch-name">${escHtml((i.name || '').slice(0, 16))}</span>
-      <span class="bb-watch-right">${price ? `<span class="bb-watch-price">${price}</span>` : ''}<span class="bb-watch-chg ${pct >= 0 ? 'up' : 'down'}">${bbPct(pct)}</span></span>
+      <span class="bb-watch-right"><span class="bb-watch-price">${price || '—'}</span><span class="bb-watch-chg ${chg.cls}">${chg.text}</span></span>
     </button>`;
   };
 
@@ -975,34 +1590,83 @@ function renderWatchlist(items) {
   el.innerHTML = html;
   el.querySelectorAll('.bb-watch-row').forEach(row => {
     row.classList.add('bb-enter');
-    row.addEventListener('click', () => loadSymbol(row.dataset.symbol));
+    row.addEventListener('click', () => bbPickSymbol(row.dataset.symbol));
     row.addEventListener('dblclick', () => {
       const sym = row.dataset.symbol;
       if (sym) window.location.href = `/emisora/${encodeURIComponent(sym)}`;
     });
   });
+  el.querySelectorAll('[data-watch-add]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addToWatchlist(btn.dataset.watchAdd, btn.dataset.watchName);
+    });
+  });
+  el.querySelectorAll('[data-watch-rm]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeFromWatchlist(btn.dataset.watchRm);
+    });
+  });
   staggerChildren(el, '.bb-watch-row', 'bb-enter');
+  if (isStockWorkspace() && !searching) {
+    const meta = document.getElementById('bbWatchMeta');
+    if (meta) {
+      const n = BB.watchlistItems?.length || 0;
+      const cat = window.BB_INIT?.catalogCount || BB.catalog.length || 0;
+      meta.textContent = n ? `${n} en seguimiento · ${cat} emisoras` : `${cat} emisoras`;
+    }
+  }
+  scheduleWatchlistQuotes();
 }
 
-async function searchCatalog(q) {
+async function searchCatalog(q, limit = 15) {
   try {
-    const res = await fetch(`/api/terminal/catalog?q=${encodeURIComponent(q)}&limit=15`);
+    const qq = (q || '').trim();
+    if (qq.length < 2) return [];
+    const res = await fetch(
+      `/api/terminal/catalog?q=${encodeURIComponent(qq)}&limit=${limit}&remote=1`,
+    );
     const data = await res.json();
     return data.items || [];
   } catch (_) { return []; }
 }
 
-function setupCommandBar() {
-  const input = document.getElementById('bbCommand');
-  const results = document.getElementById('bbCmdResults');
+function bbSymbolSearchPick(input, results, symbol, opts = {}) {
+  if (!symbol) return;
+  bbPickSymbol(symbol);
+  results.classList.remove('open');
+  input.setAttribute('aria-expanded', 'false');
+  if (opts.clearOnSelect) input.value = '';
+  else input.value = symbol;
+  input.blur();
+}
+
+function setupSymbolSearch(input, results, opts = {}) {
   if (!input || !results) return;
+  const wrap = input.closest('.bb-cmd-wrap');
 
   let timer;
   let cmdSeq = 0;
+
+  const setOpen = (open) => {
+    results.classList.toggle('open', open);
+    input.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  const moveActive = (dir) => {
+    const items = [...results.querySelectorAll('.bb-cmd-item')];
+    if (!items.length) return;
+    let idx = items.findIndex(el => el.classList.contains('active'));
+    idx = dir > 0 ? Math.min(items.length - 1, idx + 1) : Math.max(0, idx - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === idx));
+    items[idx]?.scrollIntoView({ block: 'nearest' });
+  };
+
   input.addEventListener('input', () => {
     clearTimeout(timer);
     const q = input.value.trim();
-    if (!q) { results.classList.remove('open'); return; }
+    if (!q) { setOpen(false); return; }
     timer = setTimeout(async () => {
       const seq = ++cmdSeq;
       let items;
@@ -1019,36 +1683,72 @@ function setupCommandBar() {
           i.symbol.includes(qq) || (i.name || '').toUpperCase().includes(qq)
         ).slice(0, 15);
       } else {
-        items = await searchCatalog(q);
+        items = await searchCatalog(q, opts.limit || 15);
       }
       if (seq !== cmdSeq) return;
       results.innerHTML = items.map((i, idx) => `
-        <button type="button" class="bb-cmd-item ${idx === 0 ? 'active' : ''}" data-symbol="${escHtml(i.symbol)}">
+        <button type="button" class="bb-cmd-item ${idx === 0 ? 'active' : ''}" role="option"
+          data-symbol="${escHtml(i.symbol)}">
           <span class="bb-cmd-sym">${escHtml(i.symbol)}</span>
-          <span>${escHtml((i.name || '').slice(0, 32))}</span>
+          <span>${escHtml((i.name || '').slice(0, 40))}</span>
           <span class="bb-cmd-board">${escHtml(i.board_title || '')}</span>
         </button>`).join('');
-      results.classList.add('open');
+      setOpen(items.length > 0);
       results.querySelectorAll('.bb-cmd-item').forEach(btn => {
         btn.addEventListener('click', () => {
-          loadSymbol(btn.dataset.symbol);
-          results.classList.remove('open');
+          bbSymbolSearchPick(input, results, btn.dataset.symbol, opts);
         });
       });
     }, 200);
   });
 
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const sym = input.value.trim().toUpperCase().replace('BMV:', '');
-      if (sym) { loadSymbol(sym); results.classList.remove('open'); }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!results.classList.contains('open')) input.dispatchEvent(new Event('input'));
+      else moveActive(1);
+      return;
     }
-    if (e.key === 'Escape') results.classList.remove('open');
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveActive(-1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      const active = results.querySelector('.bb-cmd-item.active');
+      if (active?.dataset.symbol) {
+        e.preventDefault();
+        bbSymbolSearchPick(input, results, active.dataset.symbol, opts);
+        return;
+      }
+      const sym = input.value.trim().toUpperCase().replace('BMV:', '');
+      if (sym) bbSymbolSearchPick(input, results, sym, opts);
+    }
+    if (e.key === 'Escape') {
+      setOpen(false);
+      input.blur();
+    }
   });
 
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.bb-cmd-wrap')) results.classList.remove('open');
+  document.addEventListener('click', (e) => {
+    if (!wrap?.contains(e.target)) setOpen(false);
   });
+}
+
+function bbFocusSymbolSearch() {
+  const el = document.getElementById('bbChartSearch');
+  if (!el) return;
+  el.focus();
+  el.select?.();
+}
+window.bbFocusSymbolSearch = bbFocusSymbolSearch;
+
+function setupCommandBar() {
+  setupSymbolSearch(
+    document.getElementById('bbChartSearch'),
+    document.getElementById('bbChartSearchResults'),
+    { clearOnSelect: true, limit: 20 },
+  );
 }
 
 async function loadIndicesBoard(force = false) {
@@ -1209,6 +1909,7 @@ function switchWorkspace(id) {
     t.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   updateWorkspaceChrome(id);
+  syncWatchPortToggleUI();
   try { localStorage.setItem('bb_workspace', id); } catch (_) {}
   const watchSearch = document.getElementById('bbWatchSearch');
   if (watchSearch && (id === 'fx' || id === 'indices')) watchSearch.value = '';
@@ -1232,9 +1933,16 @@ function switchWorkspace(id) {
     });
   } else if (id === 'market') {
     renderWatchlist();
-    if ((prev === 'indices' || prev === 'fx') && BB.symbol && !BB.catalog.find(c => c.symbol === BB.symbol)) {
-      loadSymbol(window.BB_INIT?.symbol || 'IPC', BB.period);
+    let sym = BB.symbol || window.BB_INIT?.symbol || 'IPC';
+    if ((prev === 'indices' || prev === 'fx') && sym && !BB.catalog.find(c => c.symbol === sym)) {
+      sym = window.BB_INIT?.symbol || 'IPC';
     }
+    const needsChart = prev !== 'market' || !BB.lastChartData?.points?.length;
+    if (needsChart) loadSymbol(sym, BB.period);
+  } else if (id === 'portfolio') {
+    setChartLoading(false);
+    const st = document.getElementById('bbChartStatus');
+    if (st && !BB.lastChartData?.points?.length) st.textContent = '';
   }
   refreshTicker();
   requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
@@ -1243,6 +1951,8 @@ function switchWorkspace(id) {
 function setupWorkspaceTabs() {
   let saved = 'market';
   try { saved = localStorage.getItem('bb_workspace') || 'market'; } catch (_) {}
+  const urlSym = bbNormSym(new URLSearchParams(location.search).get('symbol'));
+  if (urlSym) saved = 'market';
   switchWorkspace(saved);
   document.querySelectorAll('.bb-ws-tab').forEach(tab => {
     tab.addEventListener('click', () => switchWorkspace(tab.dataset.workspace));
@@ -1266,7 +1976,7 @@ function setupKeyboard() {
     if (document.querySelector('.bb-kbd-overlay.open, .bb-pos-modal.open')) return;
     if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
-      document.getElementById('bbCommand')?.focus();
+      bbFocusSymbolSearch();
     }
     if (e.key === '?') document.getElementById('bbKbdHelp')?.classList.add('open');
     if (e.key === 'Escape') {
@@ -1293,10 +2003,18 @@ function setupKeyboard() {
     if (e.key === 'i' || e.key === 'I') switchWorkspace('indices');
     if (e.key === 'x' || e.key === 'X') switchWorkspace('fx');
     if (e.key === 'p' || e.key === 'P') switchWorkspace('portfolio');
-    if ((e.key === 'a' || e.key === 'A') && BB.workspace === 'market' && BB.symbol) {
+    if ((e.key === 'a' || e.key === 'A') && isStockWorkspace() && BB.symbol) {
       window.location.href = `/emisora/${encodeURIComponent(BB.symbol)}`;
     }
-    if (e.key === 'l' || e.key === 'L') document.getElementById('bbLayoutBtn')?.click();
+    if ((e.key === 'w' || e.key === 'W') && isStockWorkspace() && BB.symbol && BB.symbol !== 'IPC') {
+      e.preventDefault();
+      toggleWatchlistCurrent();
+    }
+    if (e.key === 'l' || e.key === 'L') {
+      if (typeof bbToggleLayoutEditMode === 'function') bbToggleLayoutEditMode();
+      else document.getElementById('bbForgeLayoutBtn')?.click()
+        || document.getElementById('bbLayoutBtn')?.click();
+    }
   });
   document.getElementById('bbKbdClose')?.addEventListener('click', () => {
     document.getElementById('bbKbdHelp')?.classList.remove('open');
@@ -1370,6 +2088,12 @@ function renderAlerts() {
   const el = document.getElementById('bbAlertList');
   if (!el) return;
   const items = BB.alerts || [];
+  const badge = document.getElementById('bbChromeAlerts');
+  const activeN = items.filter(a => a.active).length;
+  if (badge) {
+    badge.textContent = activeN > 0 ? String(activeN) : '';
+    badge.hidden = activeN === 0;
+  }
   if (!items.length) {
     el.hidden = true;
     el.innerHTML = '';
@@ -1545,6 +2269,88 @@ function staggerChildren(container, itemSel, cls) {
   });
 }
 
+function newsTickerSymbolList() {
+  const out = [];
+  const seen = new Set();
+  const add = (sym) => {
+    const s = String(sym || '').replace('BMV:', '').trim().toUpperCase();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+  if (BB.symbol) add(BB.symbol);
+  (BB.watchlistItems || []).forEach(i => add(i.symbol));
+  (window.BB_INIT?.holdings || []).forEach(h => add(h.ticker || h.symbol));
+  return out.slice(0, 8);
+}
+
+let newsTickerFetchTimer;
+function scheduleNewsTickerRefresh() {
+  clearTimeout(newsTickerFetchTimer);
+  newsTickerFetchTimer = setTimeout(refreshNewsTicker, 400);
+}
+
+async function refreshNewsTicker() {
+  const track = document.getElementById('bbNewsTickerTrack');
+  if (!track) return;
+  try {
+    const syms = newsTickerSymbolList();
+    const q = syms.length
+      ? `limit=42&symbols=${encodeURIComponent(syms.join(','))}`
+      : 'limit=36';
+    const res = await fetch(`/api/terminal/news?${q}`);
+    const data = await res.json();
+    const items = data.items || [];
+    if (!items.length) {
+      track.innerHTML = '<span class="bb-news-tick bb-news-tick--empty">Sin noticias recientes — intenta de nuevo en un momento</span>';
+      return;
+    }
+    const html = items.map(newsTickHtml).join('');
+    track.innerHTML = html + html;
+    applyNewsTickerSpeed(track);
+  } catch (_) {
+    if (!track.childElementCount) {
+      track.innerHTML = '<span class="bb-news-tick bb-news-tick--empty">No se pudieron cargar noticias</span>';
+    }
+  }
+}
+
+/** Velocidad ~420px/s (mitad del track = un ciclo de la animación). */
+function applyNewsTickerSpeed(track) {
+  if (!track) track = document.getElementById('bbNewsTickerTrack');
+  if (!track || track.querySelector('.bb-news-tick--empty')) return;
+  const run = () => {
+    const half = track.scrollWidth / 2;
+    if (half < 40) return;
+    const PX_PER_SEC = 420;
+    const sec = Math.max(5, Math.min(16, half / PX_PER_SEC));
+    const dur = `${sec.toFixed(2)}s`;
+    track.style.setProperty('--bb-news-scroll', dur);
+    track.style.animation = `bb-scroll-news ${dur} linear infinite`;
+  };
+  requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
+let newsTickerResizeTimer;
+function onNewsTickerResize() {
+  clearTimeout(newsTickerResizeTimer);
+  newsTickerResizeTimer = setTimeout(() => {
+    applyNewsTickerSpeed();
+    applyPriceTickerSpeed();
+  }, 120);
+}
+
+function newsTickHtml(n) {
+  const title = (n.title || '').trim();
+  const pub = escHtml(n.publisher || n.tag || 'Fuente');
+  const time = escHtml((n.published_at || '').slice(0, 16).replace('T', ' '));
+  const sym = n.symbol ? `<span class="bb-news-tick-tag">${escHtml(n.symbol)}</span>` : '';
+  return `<a class="bb-news-tick" href="${safeHttpUrl(n.url)}" target="_blank" rel="noopener noreferrer" title="${escHtml(title)}">
+    ${sym}<span class="bb-news-tick-meta">${time ? `${time} · ` : ''}${pub}</span>
+    <span class="bb-news-tick-title">${escHtml(title)}</span>
+  </a>`;
+}
+
 async function refreshTicker() {
   const track = document.getElementById('bbTickerTrack');
   if (!track) return;
@@ -1568,9 +2374,26 @@ async function refreshTicker() {
     const html = quotes.map(q => tickHtml(q)).join('');
     track.innerHTML = html + html;
     track.querySelectorAll('.bb-tick').forEach(tick => {
-      tick.addEventListener('click', () => loadSymbol(tick.dataset.symbol));
+      tick.addEventListener('click', () => bbPickSymbol(tick.dataset.symbol));
     });
+    applyPriceTickerSpeed(track);
   } catch (_) {}
+}
+
+/** Velocidad del ticker de precios (misma lógica que noticias, ciclo ~80s en banda ancha). */
+function applyPriceTickerSpeed(track) {
+  if (!track) track = document.getElementById('bbTickerTrack');
+  if (!track || !track.childElementCount) return;
+  const run = () => {
+    const half = track.scrollWidth / 2;
+    if (half < 40) return;
+    const PX_PER_SEC = 95;
+    const sec = Math.max(12, Math.min(120, half / PX_PER_SEC));
+    const dur = `${sec.toFixed(2)}s`;
+    track.style.setProperty('--bb-price-scroll', dur);
+    track.style.animation = `bb-scroll-price ${dur} linear infinite`;
+  };
+  requestAnimationFrame(() => requestAnimationFrame(run));
 }
 
 function tickHtml(q) {
@@ -1601,18 +2424,29 @@ function updateWatchlistPrices(quotes) {
     const sym = row.dataset.symbol;
     const q = quotes[sym];
     if (!q || q.price == null) return;
-    const priceEl = row.querySelector('.bb-watch-price');
-    if (!priceEl) return;
+    const right = row.querySelector('.bb-watch-right');
+    if (!right) return;
+    let priceEl = row.querySelector('.bb-watch-price');
+    const chgEl = row.querySelector('.bb-watch-chg');
+    if (!priceEl) {
+      priceEl = document.createElement('span');
+      priceEl.className = 'bb-watch-price';
+      right.insertBefore(priceEl, chgEl || null);
+    }
+    const kind = q.kind || boardMeta(sym)?.kind;
     const prev = priceEl.dataset.px != null ? Number(priceEl.dataset.px) : null;
     priceEl.dataset.px = String(q.price);
     if (prev != null && prev !== q.price) flashEl(priceEl, q.price > prev ? 'up' : 'down');
-    const chgEl = row.querySelector('.bb-watch-chg');
-    const kind = q.kind || boardMeta(sym)?.kind;
     priceEl.textContent = formatQuotePrice(q.price, kind);
     if (chgEl) {
-      const pct = q.change_pct ?? 0;
-      chgEl.textContent = bbPct(pct);
-      chgEl.className = 'bb-watch-chg ' + (pct >= 0 ? 'up' : 'down');
+      if (q.change_pct == null || Number.isNaN(q.change_pct)) {
+        chgEl.textContent = '—';
+        chgEl.className = 'bb-watch-chg';
+      } else {
+        const pct = q.change_pct;
+        chgEl.textContent = bbPct(pct);
+        chgEl.className = 'bb-watch-chg ' + (pct >= 0 ? 'up' : 'down');
+      }
     }
   });
 }
@@ -1650,8 +2484,10 @@ async function refreshLiveInner() {
       BB.symbol,
       'IPC',
       ...(window.BB_INIT?.holdings || []).map(h => (h.ticker || '').replace('BMV:', '')),
+      ...(BB.watchlistItems || []).map(i => i.symbol),
       ...(BB.alerts || []).filter(a => a.active).map(a => a.symbol),
-    ])].filter(Boolean).slice(0, 16);
+      ...visibleWatchlistSymbols(),
+    ])].filter(Boolean).slice(0, 40);
   }
 
   try {
@@ -1768,7 +2604,7 @@ function updatePortfolio(port) {
       setTimeout(() => row.classList.remove('bb-row-flash', 'down'), 900);
     }
     if (price != null) prevPrices[sym] = price;
-    row.addEventListener('click', () => loadSymbol(row.dataset.symbol));
+    row.addEventListener('click', () => bbPickSymbol(row.dataset.symbol));
     row.addEventListener('dblclick', () => {
       const sym = row.dataset.symbol;
       if (sym) window.location.href = `/emisora/${encodeURIComponent(sym)}`;
@@ -1794,23 +2630,95 @@ function updateClock(market) {
   const cl = document.getElementById('bbClock');
   if (st) { st.textContent = market.label; st.className = 'bb-market-status ' + market.status; }
   if (cl) cl.textContent = market.time_mx + ' CDMX';
+  const chromeMarket = document.getElementById('chromeMarketStatus');
+  const chromeClock = document.getElementById('chromeClock');
+  if (chromeMarket) {
+    chromeMarket.textContent = market.label;
+    chromeMarket.className = 'bb-market-status ' + (market.status || 'closed');
+  }
+  if (chromeClock) chromeClock.textContent = market.time_mx + ' CDMX';
+}
+
+/** Scroll del terminal en /inversiones: rueda sobre gráfica/rail mueve .bb-main (no solo el iframe TV). */
+function setupInvestmentsMainScroll() {
+  const shell = document.getElementById('bbTerminal');
+  const main = document.getElementById('bbGrid');
+  if (!shell?.classList.contains('bb-shell--scroll') || !main || main.dataset.bbMainWheel) return;
+  main.dataset.bbMainWheel = '1';
+
+  const scrollViews = new Set(['market', 'indices', 'fx']);
+  const scrollEl = () => main;
+  const canScroll = () => {
+    const el = scrollEl();
+    return el && el.scrollHeight > el.clientHeight + 4;
+  };
+
+  const nestedCanScroll = (el, deltaY) => {
+    if (!(el instanceof HTMLElement)) return false;
+    const oy = getComputedStyle(el).overflowY;
+    if (oy !== 'auto' && oy !== 'scroll') return false;
+    if (el.scrollHeight <= el.clientHeight + 2) return false;
+    if (deltaY < 0 && el.scrollTop > 0) return true;
+    if (deltaY > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+    return false;
+  };
+
+  const isChartWheelTarget = (target) => {
+    if (!(target instanceof Node)) return false;
+    const roots = ['bbChart', 'bbVolChart', 'bbRsiChart', 'bbChartWrap'];
+    return roots.some((id) => document.getElementById(id)?.contains(target));
+  };
+
+  const onWheel = (e) => {
+    if (!scrollViews.has(BB.workspace)) return;
+    if (isChartWheelTarget(e.target)) return;
+    const el = scrollEl();
+    if (!el || !canScroll()) return;
+    let node = e.target;
+    while (node && node !== el && node !== main) {
+      if (nestedCanScroll(node, e.deltaY)) return;
+      node = node.parentElement;
+    }
+    el.scrollTop += e.deltaY;
+    e.preventDefault();
+  };
+
+  main.addEventListener('wheel', onWheel, { passive: false, capture: true });
+  document.getElementById('bbWorkspacePane')?.addEventListener('wheel', onWheel, { passive: false });
 }
 
 function initBloombergTerminal(config) {
+  const params = new URLSearchParams(location.search);
+  const urlCmp = (params.get('compare') || '').trim().toUpperCase().replace(/^BMV:/i, '');
+  if (urlCmp) BB.compare = urlCmp;
   BB.symbol = config?.symbol || 'IPC';
   BB.catalog = [];
+  BB.watchlistItems = [...(config?.watchlist || [])];
+  BB.watchlist = new Set(BB.watchlistItems.map(i => i.symbol));
   window.BB_INIT = config;
 
-  const statusEl = document.getElementById('bbChartStatus');
-  if (statusEl) statusEl.textContent = 'Cargando gráfica…';
-
   renderWatchlist([]);
+  updateWatchFollowBtn();
+  document.getElementById('bbWatchFollowBtn')?.addEventListener('click', () => toggleWatchlistCurrent());
+  try {
+    BB.showWatchPortfolio = localStorage.getItem(WATCH_PORTFOLIO_KEY) === '1';
+  } catch (_) {
+    BB.showWatchPortfolio = false;
+  }
+  document.getElementById('bbWatchPortToggle')?.addEventListener('click', () => {
+    setWatchPortfolioInSidebar(!BB.showWatchPortfolio);
+  });
+  syncWatchPortToggleUI();
+  setWatchPortfolioInSidebar(BB.showWatchPortfolio);
   loadDefaultCatalog();
   refreshTicker();
+  refreshNewsTicker();
   setupCommandBar();
   setupKeyboard();
   setupWorkspaceTabs();
   if (typeof setupTerminalLayout === 'function') setupTerminalLayout();
+  if (typeof setupWidgetsLayout === 'function') setupWidgetsLayout();
+  setupInvestmentsMainScroll();
   document.querySelectorAll('[data-chart-type]').forEach(btn => {
     btn.addEventListener('click', () => setChartType(btn.dataset.chartType));
   });
@@ -1834,25 +2742,29 @@ function initBloombergTerminal(config) {
     });
   });
   let watchSearchSeq = 0;
-  document.getElementById('bbWatchSearch')?.addEventListener('input', async (e) => {
-    const seq = ++watchSearchSeq;
+  let watchSearchTimer;
+  document.getElementById('bbWatchSearch')?.addEventListener('input', (e) => {
+    clearTimeout(watchSearchTimer);
     if (isQuoteWorkspace()) {
       renderWatchlist();
       return;
     }
     const q = e.target.value.trim();
-    if (q.length >= 2) {
-      const items = await searchCatalog(q);
+    if (q.length < 2) {
+      renderWatchlist();
+      return;
+    }
+    watchSearchTimer = setTimeout(async () => {
+      const seq = ++watchSearchSeq;
+      const items = await searchCatalog(q, 20);
       if (seq !== watchSearchSeq) return;
       const current = (document.getElementById('bbWatchSearch')?.value || '').trim();
       if (current !== q || isQuoteWorkspace()) return;
       renderWatchlist(items);
-    } else {
-      renderWatchlist(BB.catalog);
-    }
+    }, 280);
   });
   document.querySelectorAll('.bb-tick[data-symbol]').forEach(tick => {
-    tick.addEventListener('click', () => loadSymbol(tick.dataset.symbol));
+    tick.addEventListener('click', () => bbPickSymbol(tick.dataset.symbol));
   });
   document.getElementById('bbToggleMA')?.classList.add('active');
   document.getElementById('bbToggleMA')?.addEventListener('click', toggleMA);
@@ -1884,7 +2796,7 @@ function initBloombergTerminal(config) {
     document.getElementById('bbPosModal')?.classList.remove('open');
   });
   document.getElementById('bbPortRows')?.querySelectorAll('tr').forEach(row => {
-    row.addEventListener('click', () => loadSymbol(row.dataset.symbol));
+    row.addEventListener('click', () => bbPickSymbol(row.dataset.symbol));
     row.addEventListener('dblclick', () => {
       const sym = row.dataset.symbol;
       if (sym) window.location.href = `/emisora/${encodeURIComponent(sym)}`;
@@ -1894,6 +2806,12 @@ function initBloombergTerminal(config) {
   setupPriceAlerts();
   document.getElementById('bbTerminal')?.classList.add('bb-ready');
   setupChartResizeObserver();
+  const reflowCharts = () => {
+    if (typeof resizeAllCharts === 'function') resizeAllCharts();
+  };
+  requestAnimationFrame(() => requestAnimationFrame(reflowCharts));
+  setTimeout(reflowCharts, 120);
+  setTimeout(reflowCharts, 600);
   dismissFlashBanners();
 
   document.getElementById('bbCompareBtn')?.addEventListener('click', e => toggleCompare(e.shiftKey));
@@ -1903,7 +2821,9 @@ function initBloombergTerminal(config) {
   });
 
   if (BB.workspace === 'market') {
-    loadSymbol(BB.symbol, '6mo');
+    loadSymbol(BB.symbol, BB.period || '6mo');
+  } else {
+    setChartLoading(false);
   }
   setTimeout(refreshLive, 4000);
   startTerminalPolls();
@@ -1914,21 +2834,25 @@ function initBloombergTerminal(config) {
       startTerminalPolls();
     }
   });
+  window.addEventListener('resize', onNewsTickerResize);
 }
 
 let livePollTimer = null;
 let clockPollTimer = null;
+let newsTickerPollTimer = null;
 
 function stopTerminalPolls() {
   clearInterval(livePollTimer);
   clearInterval(clockPollTimer);
-  livePollTimer = clockPollTimer = null;
+  clearInterval(newsTickerPollTimer);
+  livePollTimer = clockPollTimer = newsTickerPollTimer = null;
 }
 
 function startTerminalPolls() {
   stopTerminalPolls();
   if (document.hidden) return;
   livePollTimer = setInterval(refreshLive, BB.pollMs);
+  newsTickerPollTimer = setInterval(refreshNewsTicker, 300000);
   clockPollTimer = setInterval(async () => {
     try {
       const res = await fetch('/api/terminal/market');
@@ -1938,4 +2862,4 @@ function startTerminalPolls() {
 }
 
 /* Legacy compat */
-function loadTerminalChart(sym, per) { loadSymbol(sym, per); }
+function loadTerminalChart(sym, per) { bbPickSymbol(sym, per); }

@@ -79,7 +79,10 @@ function initProWidgets() {
 function initPWA() {
   if (!('serviceWorker' in navigator)) return;
 
-  navigator.serviceWorker.register('/static/sw.js?v=56').catch(() => {});
+  const swV = window.FINANZAS_SW_V || 1;
+  navigator.serviceWorker.register(`/static/sw.js?v=${swV}`).then((reg) => {
+    reg.update().catch(() => {});
+  }).catch(() => {});
 
   const banner = document.getElementById('pwa-install');
   const btn = document.getElementById('pwa-install-btn');

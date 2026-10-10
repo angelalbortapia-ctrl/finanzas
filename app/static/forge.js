@@ -58,7 +58,7 @@ let paletteItems = [];
 function isTypingContext() {
   const el = document.activeElement;
   if (!el) return false;
-  if (el.id === 'bbPaletteInput' || el.id === 'bbCommand') return false;
+  if (el.id === 'bbPaletteInput' || el.id === 'bbChartSearch') return false;
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 }
@@ -187,11 +187,9 @@ function initGlobalPalette() {
   document.addEventListener('keydown', e => {
     if (e.key === '/' && !isTypingContext()) {
       const onTerminal = !!document.getElementById('bbTerminal');
-      const cmd = document.getElementById('bbCommand');
-      if (onTerminal && cmd) {
+      if (onTerminal && typeof window.bbFocusSymbolSearch === 'function') {
         e.preventDefault();
-        cmd.focus();
-        cmd.select?.();
+        window.bbFocusSymbolSearch();
         return;
       }
       e.preventDefault();

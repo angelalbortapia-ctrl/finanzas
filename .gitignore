@@ -19,3 +19,6 @@ finanzas-stderr.log
 finanzas.log
 .DS_Store
 .pydeps/
+docs/emisora-analisis-full.json
+docs/emisora-analisis-para-claude.json
+docs/finanzas-para-gemini.json

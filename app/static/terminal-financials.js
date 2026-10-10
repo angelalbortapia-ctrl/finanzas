@@ -169,6 +169,7 @@ function finIncomeComboChart(canvasId, trend, annual) {
   const netIncome = finAlignSeries(periods, pack.net_income);
   const margin = finAlignSeries(periods, pack.margin_pct);
   finMountChart(canvasId, {
+    type: 'bar',
     data: {
       labels: periods,
       datasets: [
@@ -279,7 +280,7 @@ function finPeLabel(trailing, forward) {
 function finYieldLabel(quote) {
   const y = quote?.dividend_yield ?? quote?.fundamentals?.dividend_yield;
   if (y == null || isNaN(y)) return '—';
-  const pct = Math.abs(y) < 1 ? y * 100 : y;
+  const pct = Number(y);
   const ex = quote?.ex_dividend_date;
   return ex ? `${Number(pct).toFixed(2)}% · ex ${ex}` : `${Number(pct).toFixed(2)}%`;
 }
@@ -292,15 +293,16 @@ function finRenderResumen(quote, data) {
   const fwd = earn.forward_eps;
   const qTrend = data.income_trends?.quarterly?.margin_pct || [];
   const lastMargin = qTrend.length ? qTrend[qTrend.length - 1].value : null;
-  const capLabel = f.market_cap_estimated ? 'Cap. bursátil (est.)' : 'Cap. bursátil';
-  const capVal = f.market_cap != null ? finFmtVal(f.market_cap, cur) : '—';
+  const capRaw = quote?.market_cap ?? f.market_cap;
+  const capLabel = (quote?.market_cap == null && f.market_cap_estimated) ? 'Cap. bursátil (est.)' : 'Cap. bursátil';
+  const capVal = capRaw != null ? finFmtVal(capRaw, cur) : '—';
   return `
     <div class="bb-fin-kpis">
       <div class="bb-fin-kpi"><span>P/E trail / fwd</span><strong>${finPeLabel(f.pe_trailing, f.pe_forward)}</strong></div>
       <div class="bb-fin-kpi"><span>Yield / ex-div</span><strong>${finYieldLabel(quote)}</strong></div>
       <div class="bb-fin-kpi"><span>P/B</span><strong>${f.price_to_book != null ? Number(f.price_to_book).toFixed(2) : '—'}</strong></div>
       <div class="bb-fin-kpi"><span>Margen trim.</span><strong>${lastMargin != null ? Number(lastMargin).toFixed(1) + '%' : (f.profit_margin != null ? Number(f.profit_margin).toFixed(1) + '%' : '—')}</strong></div>
-      ${f.market_cap != null ? `<div class="bb-fin-kpi bb-fin-kpi--muted"><span>${capLabel}</span><strong>${capVal}</strong></div>` : ''}
+      ${capRaw != null ? `<div class="bb-fin-kpi bb-fin-kpi--muted"><span>${capLabel}</span><strong>${capVal}</strong></div>` : ''}
     </div>
     ${nextDate ? `<div class="bb-fin-next-report">
       <div><span>Próximo reporte</span><strong>${escHtml(nextDate)}</strong></div>
@@ -438,13 +440,23 @@ function finRenderStats(data) {
   ).join('')}</div>`;
 }
 
-function finWaitForChart(cb, tries = 40) {
+function finWaitForChart(cb, tries = 80) {
   if (typeof Chart !== 'undefined') {
     cb();
     return;
   }
   if (tries <= 0) return;
   setTimeout(() => finWaitForChart(cb, tries - 1), 150);
+}
+
+function finRepaintCharts() {
+  const st = window.FIN_PAGE || {};
+  const tab = finGetTab();
+  const data = st.lastFinancials;
+  const quote = st.lastQuote;
+  if (!data || data.error || !data.applicable) return;
+  finBindCharts(tab, data);
+  finBindQuoteGrid(quote);
 }
 
 function finBindCharts(tab, data) {
@@ -629,6 +641,7 @@ function renderFinHub(quote, data, tab) {
     finBindCharts(activeTab, data);
     finBindQuoteGrid(quote);
     finBindPeriodToggles(data);
+    setTimeout(finRepaintCharts, 400);
   } catch (err) {
     console.error('renderFinHub', err);
     content.innerHTML = '<p class="bb-fin-empty">Error al mostrar la información financiera</p>';
@@ -642,7 +655,9 @@ function renderFinHub(quote, data, tab) {
       const finPage = window.FIN_PAGE;
       const sym = document.getElementById('bbEmisoraSymbol')?.textContent;
       if (onPage && sym) {
-        history.replaceState(null, '', `/emisora/${encodeURIComponent(sym)}?tab=${nextTab}`);
+        const tabQ = nextTab !== 'resumen' ? `&tab=${nextTab}` : '';
+        history.replaceState(null, '', `/emisora/${encodeURIComponent(sym)}?view=financiero${tabQ}`);
+        if (typeof window.setEmisoraMainView === 'function') window.setEmisoraMainView('financiero');
       }
       if (onPage && sym && !finSectionLoaded(finPage?.lastFinancials, nextTab)) {
         content.innerHTML = finSkeletonHtml(nextTab);

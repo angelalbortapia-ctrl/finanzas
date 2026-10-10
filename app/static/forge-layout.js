@@ -206,8 +206,12 @@ function fxBindPanelH(handle) {
 }
 
 function setupForgeLayout() {
+  if (document.getElementById('bbTerminal')) {
+    if (typeof bbWireChromeLayoutUi === 'function') bbWireChromeLayoutUi();
+    return;
+  }
   const root = document.getElementById('bbPage') || document.getElementById('bbHome');
-  if (!root || document.getElementById('bbTerminal')) return;
+  if (!root) return;
 
   const layouts = root.querySelectorAll('[data-fx-layout]');
   if (!layouts.length) return;
@@ -229,10 +233,13 @@ function setupForgeLayout() {
   const syncLayoutUi = () => {
     if (wrap) wrap.hidden = mq.matches;
     if (mq.matches && document.body.classList.contains('bb-layout-edit')) {
-      document.body.classList.remove('bb-layout-edit');
-      btn.classList.remove('active');
-      btn.textContent = 'Ajustar';
-      if (reset) reset.hidden = true;
+      if (typeof window.bbSetLayoutEditMode === 'function') window.bbSetLayoutEditMode(false);
+      else {
+        document.body.classList.remove('bb-layout-edit');
+        btn.classList.remove('active');
+        btn.textContent = '⊞ Ajustar';
+        if (reset) reset.hidden = true;
+      }
     }
   };
   syncLayoutUi();
@@ -240,10 +247,17 @@ function setupForgeLayout() {
   btn.textContent = 'Ajustar';
 
   btn.addEventListener('click', () => {
-    const on = document.body.classList.toggle('bb-layout-edit');
-    btn.classList.toggle('active', on);
-    btn.textContent = on ? 'Listo' : 'Ajustar';
-    if (reset) reset.hidden = !on;
+    const shell = document.getElementById('bbTerminal');
+    const on = !document.body.classList.contains('bb-layout-edit');
+    if (typeof window.bbSetLayoutEditMode === 'function') {
+      window.bbSetLayoutEditMode(on);
+    } else {
+      document.body.classList.toggle('bb-layout-edit', on);
+      shell?.classList.toggle('bb-layout-edit', on);
+      btn.classList.toggle('active', on);
+      btn.textContent = on ? 'Listo' : '⊞ Ajustar';
+      if (reset) reset.hidden = !on;
+    }
   });
 
   reset?.addEventListener('click', () => {
@@ -251,6 +265,8 @@ function setupForgeLayout() {
     fxApplyAll(FX._state);
     fxSaveState(FX._state);
     fxNotifyResize();
+    if (typeof window.bbResetWidgetsLayout === 'function') window.bbResetWidgetsLayout();
+    if (typeof window.bbResetTerminalLayout === 'function') window.bbResetTerminalLayout();
   });
 }
 

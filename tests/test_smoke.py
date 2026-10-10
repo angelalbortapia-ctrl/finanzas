@@ -29,6 +29,7 @@ from app.terminal import (
     _income_trends,
     get_chart_data,
     get_financials_detail,
+    get_terminal_widgets,
     get_economic_calendar,
     get_fx_panel,
     get_holding_position,
@@ -228,6 +229,17 @@ class SmokeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_price_alert("ZZZZSINPOSICION", "cost_drop", 10)
 
+    def test_watchlist_add_remove(self):
+        from app.portfolio_tools import add_watchlist_symbol, list_watchlist, remove_watchlist_symbol
+
+        item = add_watchlist_symbol("WALMEX")
+        self.assertEqual(item["symbol"], "WALMEX")
+        syms = [i["symbol"] for i in list_watchlist()]
+        self.assertIn("WALMEX", syms)
+        self.assertTrue(remove_watchlist_symbol("WALMEX"))
+        syms = [i["symbol"] for i in list_watchlist()]
+        self.assertNotIn("WALMEX", syms)
+
     def test_portfolio_analytics_day_pnl(self):
         from unittest.mock import patch
 
@@ -312,9 +324,66 @@ class SmokeTests(unittest.TestCase):
         bad = client.get("/emisora/ZZZZNOTREAL")
         self.assertEqual(bad.status_code, 404)
 
+    def test_emisora_overview_api_unknown(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        client = TestClient(app)
+        bad = client.get("/api/emisora/overview", params={"symbol": "ZZZZNOTREAL"})
+        self.assertEqual(bad.status_code, 404)
+
     def test_financials_not_applicable_for_index(self):
         data = get_financials_detail("IPC")
         self.assertFalse(data.get("applicable"))
+
+    def test_widgets_not_applicable_for_index(self):
+        data = get_terminal_widgets("IPC")
+        self.assertFalse(data.get("applicable"))
+
+    def test_tradingview_symbol_sic_us_listing(self):
+        from app.tv_intel import tradingview_candidates, tradingview_symbol
+
+        meta = {"symbol": "SBUX", "board": "sic", "kind": "sic"}
+        self.assertEqual(tradingview_symbol(meta), "NASDAQ:SBUX")
+        cands = tradingview_candidates(meta)
+        self.assertEqual(cands[0], "NASDAQ:SBUX")
+        self.assertIn("BMV:SBUX", cands)
+        bmv = {"symbol": "WALMEX", "board": "bmv", "kind": "stock"}
+        self.assertEqual(tradingview_symbol(bmv), "BMV:WALMEX")
+        jpm = {"symbol": "JPM", "board": "sic", "kind": "sic"}
+        self.assertEqual(tradingview_symbol(jpm), "NYSE:JPM")
+
+    def test_widgets_payload_shape(self):
+        from unittest.mock import patch
+
+        fake_fin = {
+            "symbol": "WALMEX",
+            "name": "Walmart",
+            "yahoo": "WALMEX.MX",
+            "applicable": True,
+            "currency": "MXN",
+            "statistics": [{"label": "P/E", "value": "12"}],
+            "earnings": {"quarterly": []},
+            "dividends": {"history": []},
+            "income_trends": {},
+            "fundamentals": {},
+            "analysts": None,
+            "fetched_at": "now",
+        }
+        meta = {"symbol": "WALMEX", "yahoo": "WALMEX.MX", "board": "bmv", "kind": "stock"}
+        with patch("app.terminal.get_financials_detail", return_value=fake_fin), patch(
+            "app.terminal.get_symbol_meta", return_value=meta,
+        ), patch(
+            "app.terminal._news_for_symbol", return_value=[{"title": "t", "url": "https://x.com"}],
+        ), patch(
+            "app.tv_intel.fetch_tradingview_scan",
+            return_value={"tv_symbol": "BMV:WALMEX", "applicable": True, "metrics": []},
+        ), patch("app.terminal._yahoo_profile_bundle", return_value=(None, None)):
+            data = get_terminal_widgets("WALMEX")
+        self.assertTrue(data.get("applicable"))
+        self.assertIn("google_news", data)
+        self.assertIn("tradingview", data)
+        self.assertIn("Yahoo Finance", data.get("sources", []))
 
     def test_financials_statement_shape(self):
         from unittest.mock import MagicMock, patch

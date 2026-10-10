@@ -10,12 +10,13 @@ logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from pydantic import BaseModel
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.auth import COOKIE_NAME, check_pin, pin_enabled, pin_middleware
-from app.blocking import run_blocking, run_local
+from app.blocking import run_blocking, run_local, shutdown_executors
+from app.emisora_analysis import get_emisora_overview, page_symbol_allowed, search_symbols
 from app.config import GBM_AUTO_IMPORT_HOURS, STATIC_V, USER_NAME
 from app.database import get_db, init_db
 from app.gbm import has_investment_data, import_from_excel as import_gbm_excel
@@ -55,23 +56,28 @@ from app.terminal import (
     get_economic_calendar,
     get_fx_panel,
     get_live_quotes,
+    get_blended_ticker_news,
     get_market_news,
     get_market_status,
     get_portfolio_live,
     get_financials_detail,
     get_holding_position,
     get_quote_detail,
+    get_terminal_widgets,
     preload_portfolio_cache,
 )
 from app.portfolio_tools import (
+    add_watchlist_symbol,
     check_alerts_now,
     create_price_alert,
     delete_price_alert,
     evaluate_price_alerts,
     get_portfolio_analytics,
     list_price_alerts,
+    list_watchlist,
     notify_macos,
     alert_message,
+    remove_watchlist_symbol,
 )
 from app.catalog import catalog_count, list_catalog, search_catalog
 from app.seed import seed_from_excel
@@ -153,6 +159,7 @@ async def lifespan(app: FastAPI):
             await task
         except asyncio.CancelledError:
             pass
+    shutdown_executors()
 
 
 app = FastAPI(title="Finanzas", lifespan=lifespan)
@@ -180,6 +187,13 @@ def _ctx(request: Request, page: str, **extra):
     return {"request": request, "page": page, **extra}
 
 
+def _render(request: Request, template: str, page: str, **extra):
+    response = templates.TemplateResponse(request, template, _ctx(request, page, **extra))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -197,7 +211,7 @@ async def api_status():
 
 @app.get("/offline", response_class=HTMLResponse)
 async def offline_page(request: Request):
-    return templates.TemplateResponse("offline.html", _ctx(request, "dashboard"))
+    return _render(request, "offline.html", "dashboard")
 
 
 @app.get("/manifest.webmanifest")
@@ -240,6 +254,11 @@ class PriceAlertBody(BaseModel):
     target: float
 
 
+class WatchlistBody(BaseModel):
+    symbol: str
+    name: Optional[str] = None
+
+
 class TransactionBody(BaseModel):
     date: str
     amount: float
@@ -276,8 +295,16 @@ async def terminal_chart_api(symbol: str = "IPC", period: str = "6mo", compare: 
 
 
 @app.get("/api/terminal/news")
-async def terminal_news_api(limit: int = 30, symbol: str = ""):
-    items = await run_blocking(lambda: get_market_news(limit, symbol=symbol))
+async def terminal_news_api(limit: int = 30, symbol: str = "", symbols: str = ""):
+    def _fetch():
+        if symbol:
+            return get_market_news(limit, symbol=symbol)
+        if symbols.strip():
+            sym_list = [p.strip() for p in symbols.split(",") if p.strip()]
+            return get_blended_ticker_news(limit, sym_list)
+        return get_market_news(limit, symbol="")
+
+    items = await run_blocking(_fetch)
     return {"items": items, "count": len(items)}
 
 
@@ -291,6 +318,19 @@ async def terminal_financials_api(symbol: str = "IPC", section: str = "all"):
     return await run_blocking(get_financials_detail, symbol, section)
 
 
+@app.get("/api/terminal/widgets")
+async def terminal_widgets_api(symbol: str = "IPC"):
+    data = await run_blocking(get_terminal_widgets, symbol)
+    headers = {"Cache-Control": "private, max-age=45"}
+    if data.pop("_cached", None):
+        headers["X-Widgets-Cache"] = "hit"
+    else:
+        headers["X-Widgets-Cache"] = "miss"
+    if data.get("stale"):
+        headers["X-Widgets-Stale"] = "1"
+    return JSONResponse(content=data, headers=headers)
+
+
 @app.get("/api/terminal/holding")
 async def terminal_holding_api(symbol: str):
     quote = await run_blocking(get_quote_detail, symbol)
@@ -301,9 +341,21 @@ async def terminal_holding_api(symbol: str):
     return {"holding": holding}
 
 
+@app.get("/api/emisora/overview")
+async def emisora_overview_api(symbol: str):
+    from app.catalog import is_known_symbol
+
+    sym = (symbol or "").strip().upper().replace("BMV:", "")
+    if not sym or not is_known_symbol(sym):
+        raise HTTPException(status_code=404, detail="Emisora no encontrada")
+    return await run_blocking(get_emisora_overview, sym)
+
+
 @app.get("/api/terminal/catalog")
-async def terminal_catalog_api(q: str = "", board: str = "all", limit: int = 50):
-    if q.strip():
+async def terminal_catalog_api(q: str = "", board: str = "all", limit: int = 50, remote: int = 0):
+    if q.strip() and remote:
+        items = await run_blocking(search_symbols, q, min(limit, 20))
+    elif q.strip():
         items = search_catalog(q, limit=limit)
     else:
         items = list_catalog(board=board, limit=limit)
@@ -365,6 +417,28 @@ async def terminal_alerts_delete(alert_id: int):
     ok = await run_local(delete_price_alert, alert_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Alerta no encontrada")
+    return {"ok": True}
+
+
+@app.get("/api/terminal/watchlist")
+async def terminal_watchlist_api():
+    return {"items": await run_local(list_watchlist)}
+
+
+@app.post("/api/terminal/watchlist")
+async def terminal_watchlist_add(body: WatchlistBody):
+    try:
+        item = await run_local(add_watchlist_symbol, body.symbol, body.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return item
+
+
+@app.delete("/api/terminal/watchlist/{symbol}")
+async def terminal_watchlist_remove(symbol: str):
+    ok = await run_local(remove_watchlist_symbol, symbol)
+    if not ok:
+        raise HTTPException(status_code=404, detail="No está en seguimiento")
     return {"ok": True}
 
 
@@ -487,7 +561,7 @@ async def login_page(request: Request, next: str = "/"):
     dest = safe_next(next)
     if not pin_enabled():
         return RedirectResponse(dest, status_code=303)
-    return templates.TemplateResponse("login.html", _ctx(request, "login", next=dest))
+    return _render(request, "login.html", "login", next=dest)
 
 
 @app.post("/login")
@@ -512,13 +586,13 @@ async def login_submit(request: Request, pin: str = Form(...), next: str = Form(
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse("dashboard.html", _ctx(request, "dashboard", data=get_dashboard()))
+    return _render(request, "dashboard.html", "dashboard", data=get_dashboard())
 
 
 @app.get("/tarjetas", response_class=HTMLResponse)
 async def cards_page(request: Request):
     data = get_dashboard()
-    return templates.TemplateResponse("cards.html", _ctx(request, "cards", cards=data["cards"], data=data))
+    return _render(request, "cards.html", "cards", cards=data["cards"], data=data)
 
 
 @app.get("/tarjetas/{card_id}", response_class=HTMLResponse)
@@ -532,8 +606,10 @@ async def card_detail(request: Request, card_id: int):
     line = detail["card"]["credit_line"]
     card_info = next((c for c in get_cards() if c["id"] == card_id), None)
     usage_pct = (revolving / line * 100) if line else 0
-    return templates.TemplateResponse("card_detail.html", _ctx(
-        request, "cards",
+    return _render(
+        request,
+        "card_detail.html",
+        "cards",
         detail=detail,
         card_info=card_info,
         balance=balance,
@@ -542,7 +618,7 @@ async def card_detail(request: Request, card_id: int):
         available=line - revolving,
         usage_pct=usage_pct,
         persons=get_persons(),
-    ))
+    )
 
 
 @app.post("/tarjetas/{card_id}/categoria")
@@ -585,7 +661,7 @@ async def new_card_route(name: str = Form(...), credit_line: float = Form(...), 
 
 @app.get("/patrimonio", response_class=HTMLResponse)
 async def patrimony_page(request: Request):
-    return templates.TemplateResponse("patrimony.html", _ctx(request, "patrimony", data=get_dashboard()))
+    return _render(request, "patrimony.html", "patrimony", data=get_dashboard())
 
 
 @app.post("/patrimonio/cerrar")
@@ -610,12 +686,14 @@ async def add_patrimony_route(
 
 @app.get("/movimientos", response_class=HTMLResponse)
 async def transactions_page(request: Request):
-    return templates.TemplateResponse("transactions.html", _ctx(
-        request, "transactions",
+    return _render(
+        request,
+        "transactions.html",
+        "transactions",
         transactions=get_transactions(),
         cards=get_cards(),
         today=date.today().isoformat(),
-    ))
+    )
 
 
 @app.post("/api/movimientos")
@@ -680,7 +758,7 @@ async def delete_transaction_route(tx_id: int):
 
 @app.get("/configuracion", response_class=HTMLResponse)
 async def settings_page(request: Request):
-    return templates.TemplateResponse("configuracion.html", _ctx(request, "settings"))
+    return _render(request, "configuracion.html", "settings")
 
 
 @app.post("/importar")
@@ -720,17 +798,19 @@ async def add_fixed_expense_route(
 
 @app.get("/inversiones", response_class=HTMLResponse)
 async def investments_page(request: Request):
-    from app.catalog import get_symbol_meta
-
     data = get_investments()
+    from app.catalog import is_known_symbol
+
     sym = (request.query_params.get("symbol") or "").strip().upper().replace("BMV:", "")
-    if sym and get_symbol_meta(sym) and data.get("terminal"):
+    if sym and is_known_symbol(sym) and data.get("terminal"):
         data["terminal"] = {**data["terminal"], "default_symbol": sym}
-    return templates.TemplateResponse("inversiones.html", _ctx(
-        request, "investments",
+    return _render(
+        request,
+        "inversiones.html",
+        "investments",
         data=data,
         google=get_google_status(),
-    ))
+    )
 
 
 @app.get("/emisora/{symbol}", response_class=HTMLResponse)
@@ -738,14 +818,12 @@ async def emisora_page(request: Request, symbol: str):
     from app.catalog import get_symbol_meta, is_known_symbol
 
     sym = (symbol or "").strip().upper().replace("BMV:", "")
-    if not is_known_symbol(sym):
+    if not sym or not is_known_symbol(sym):
         raise HTTPException(status_code=404, detail="Emisora no encontrada")
     meta = get_symbol_meta(sym)
-    return templates.TemplateResponse("emisora.html", _ctx(
-        request, "emisora",
-        symbol=meta["symbol"],
-        meta=meta,
-    ))
+    if not meta:
+        raise HTTPException(status_code=404, detail="Emisora no encontrada")
+    return _render(request, "emisora.html", "emisora", symbol=meta["symbol"], meta=meta)
 
 
 @app.post("/inversiones/importar")
@@ -825,12 +903,14 @@ async def delete_holding_route(ticker: str = Form(...)):
 @app.get("/simulador", response_class=HTMLResponse)
 async def simulator_page(request: Request):
     cards = get_cards()
-    return templates.TemplateResponse("simulador.html", _ctx(
-        request, "simulator",
+    return _render(
+        request,
+        "simulador.html",
+        "simulator",
         cards=cards,
         total_debt=total_revolving_debt(cards),
         result=None,
-    ))
+    )
 
 
 @app.post("/simulador", response_class=HTMLResponse)
@@ -842,12 +922,14 @@ async def simulator_run(
 ):
     cards = get_cards()
     result = simulate_payoff(cards, monthly_payment, apr / 100, strategy)
-    return templates.TemplateResponse("simulador.html", _ctx(
-        request, "simulator",
+    return _render(
+        request,
+        "simulador.html",
+        "simulator",
         cards=cards,
         total_debt=total_revolving_debt(cards),
         result=result,
         monthly_payment=monthly_payment,
         apr=apr,
         strategy=strategy,
-    ))
+    )

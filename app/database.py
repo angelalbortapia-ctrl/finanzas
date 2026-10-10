@@ -7,6 +7,7 @@ from typing import Optional
 from app.config import DATA_DIR, ROOT
 
 DB_PATH = Path(os.environ.get("FINANZAS_DB_PATH", str(DATA_DIR / "finanzas.db")))
+_WAL_READY = False
 
 
 def _migrate_legacy_db() -> None:
@@ -173,6 +174,13 @@ CREATE TABLE IF NOT EXISTS price_alerts (
     active INTEGER NOT NULL DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS watchlist_symbols (
+    symbol TEXT PRIMARY KEY,
+    name TEXT,
+    created_at TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS schema_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -188,10 +196,13 @@ CREATE TABLE IF NOT EXISTS transaction_payment_allocations (
 
 
 def get_db():
+    global _WAL_READY
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
+    if not _WAL_READY:
+        conn.execute("PRAGMA journal_mode = WAL")
+        _WAL_READY = True
     return conn
 
 

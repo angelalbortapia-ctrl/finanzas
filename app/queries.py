@@ -769,10 +769,12 @@ def get_investments():
         snapshot_dict["total_iva"] = net["sell_iva"]
 
     terminal = get_terminal_context(holdings_list)
+    from app.portfolio_tools import list_watchlist
 
     return {
         "snapshot": snapshot_dict,
         "holdings": holdings_list,
+        "watchlist": list_watchlist(),
         "indices": [dict(i) for i in indices],
         "history": history,
         "last_sync": dict(last_sync) if last_sync else None,

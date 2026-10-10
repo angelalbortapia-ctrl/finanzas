@@ -1,0 +1,2494 @@
+/* Terminal Pro — capa visual (TradingView / terminal moderno) */
+
+.bb-shell--pro {
+  --bb-watch-w: 324px;
+  --bb-info-w: 408px;
+  --bb-layout-pad: 14px;
+  --bb-layout-pad-b: 28px;
+  --bb-terminal-pad-b: 20px;
+  --bb-terminal-offset-y: 40px;
+  --bb-fs: 15px;
+  --bb-fs-sm: 13px;
+  --bb-fs-lg: 18px;
+  --bb-fs-xl: 24px;
+  --bb-vol-h: 88px;
+  --bb-pro-accent: #38bdf8;
+  --bb-news-bar-h: 48px;
+  gap: 10px;
+  padding-top: 12px;
+  padding-bottom: 0;
+  box-sizing: border-box;
+  font-size: var(--bb-fs);
+  --bb-pro-accent-2: #22d3ee;
+  --bb-pro-surface: #0a0d12;
+  --bb-pro-elevated: #11161f;
+  --bb-pro-border: #1c2433;
+  --bb-pro-text: #f1f5f9;
+  --bb-pro-muted: #64748b;
+  --bb-pro-up: #34d399;
+  --bb-pro-down: #fb7185;
+  background: #050608 !important;
+  color: var(--bb-pro-text);
+}
+
+/* ── Top ── */
+.bb-shell--pro .bb-topbar {
+  background: #050608;
+  border-bottom: 1px solid var(--bb-pro-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: .5rem .85rem;
+  gap: .75rem;
+}
+.bb-shell--pro .bb-logo {
+  background: none;
+  -webkit-text-fill-color: unset;
+  color: var(--bb-pro-text);
+  font-size: .68rem;
+  letter-spacing: .24em;
+}
+.bb-shell--pro .bb-logo span {
+  color: var(--bb-pro-accent);
+  opacity: 1;
+}
+.bb-shell--pro .bb-cmd-wrap {
+  max-width: 36rem;
+  width: 100%;
+  margin: 0 auto;
+}
+.bb-shell--pro .bb-cmd {
+  background: var(--bb-pro-elevated);
+  border: 1px solid var(--bb-pro-border);
+  border-radius: 10px;
+  padding: .5rem .75rem;
+  color: var(--bb-pro-text);
+  font-size: .8rem;
+}
+.bb-shell--pro .bb-cmd:focus {
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+.bb-shell--pro .bb-cmd-hint {
+  right: .65rem;
+  opacity: .35;
+}
+.bb-shell--pro .bb-market-status {
+  background: var(--bb-pro-elevated);
+  border-color: var(--bb-pro-border);
+  box-shadow: none;
+}
+.bb-shell--pro .bb-market-status.open {
+  color: var(--bb-pro-up);
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.08);
+}
+.bb-shell--pro .bb-clock {
+  color: var(--bb-pro-muted);
+  font-size: .68rem;
+}
+
+.bb-shell--pro .bb-ticker {
+  height: 32px;
+  min-height: 32px;
+  background: linear-gradient(180deg, #07090e 0%, #050608 100%);
+  border-bottom: 1px solid var(--bb-pro-border);
+  flex-shrink: 0;
+}
+.bb-shell--pro .bb-tick {
+  height: 32px;
+  font-size: .7rem;
+}
+.bb-shell--pro .bb-tick-sym {
+  color: var(--bb-pro-accent);
+}
+
+/* ── Workspace tabs ── */
+.bb-shell--pro .bb-workspace-tabs {
+  background: #050608;
+  border-bottom: 1px solid var(--bb-pro-border);
+  padding: .4rem .85rem;
+  gap: .35rem;
+}
+.bb-shell--pro .bb-ws-tab {
+  border-radius: 999px;
+  padding: .4rem 1.1rem;
+  font-size: .68rem;
+  letter-spacing: .08em;
+  border: 1px solid transparent;
+}
+.bb-shell--pro .bb-ws-tab.active {
+  color: var(--bb-pro-text);
+  background: var(--bb-pro-elevated);
+  border-color: var(--bb-pro-border);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.25);
+}
+.bb-shell--pro .bb-ws-tab.active::after {
+  content: '';
+  display: none;
+}
+
+/* ── Grid ── */
+.bb-shell--pro .bb-main {
+  background: #050608;
+  gap: 0;
+  padding: var(--bb-layout-pad) var(--bb-layout-pad) var(--bb-layout-pad-b);
+  box-sizing: border-box;
+}
+.bb-shell--pro .bb-panel {
+  background: var(--bb-pro-surface);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--bb-pro-border);
+}
+.bb-shell--pro .bb-panel-head {
+  background: transparent;
+  border-color: var(--bb-pro-border);
+  padding: .55rem .7rem;
+}
+.bb-shell--pro .bb-panel-head h2 {
+  color: var(--bb-pro-muted);
+  font-size: .65rem;
+  letter-spacing: .16em;
+}
+
+/* ── Watchlist ── */
+.bb-shell--pro .bb-watch-search {
+  margin: .5rem .55rem 0;
+  width: calc(100% - 1.1rem);
+  border-radius: 8px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+}
+.bb-shell--pro .bb-watch-search:focus {
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+.bb-shell--pro .bb-watch-tabs {
+  padding: .45rem .55rem .35rem;
+  border: none;
+}
+.bb-shell--pro .bb-watch-tab {
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--bb-pro-muted);
+}
+.bb-shell--pro .bb-watch-tab.active {
+  color: var(--bb-pro-text);
+  background: var(--bb-pro-elevated);
+  border-color: var(--bb-pro-border);
+}
+.bb-shell--pro #bbWatchlist {
+  padding: .35rem .45rem .65rem;
+}
+.bb-shell--pro .bb-watch-divider {
+  background: transparent;
+  border: none;
+  padding: .65rem .35rem .35rem;
+  font-size: .58rem;
+  color: #475569;
+}
+.bb-shell--pro .bb-watch-divider--follow {
+  color: var(--bb-pro-accent);
+  border-left: none;
+  background: transparent;
+}
+.bb-shell--pro .bb-watch-divider--port {
+  color: #94a3b8;
+  background: transparent;
+}
+.bb-shell--pro .bb-watch-row,
+.bb-shell--pro .bb-watch-row-wrap {
+  margin-bottom: 3px;
+}
+.bb-shell--pro .bb-watch-row {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: .45rem .5rem;
+}
+.bb-shell--pro .bb-watch-row:hover {
+  background: var(--bb-pro-elevated);
+  border-color: var(--bb-pro-border);
+}
+.bb-shell--pro .bb-watch-row.active {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: none;
+}
+.bb-shell--pro .bb-watch-sym {
+  color: var(--bb-pro-text);
+}
+.bb-shell--pro .bb-watch-port-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--bb-pro-muted);
+  font-family: var(--bb-sans);
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1;
+  padding: .28rem .38rem;
+  border-radius: var(--bb-radius-sm);
+  cursor: pointer;
+}
+.bb-shell--pro .bb-watch-port-toggle.active {
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.12);
+}
+.bb-shell--pro .bb-watch-follow-btn.active {
+  color: var(--bb-pro-accent);
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.1);
+  box-shadow: none;
+}
+.bb-shell--pro .bb-watch-action {
+  border-radius: 0 8px 8px 0;
+  border-color: var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+}
+
+/* ── Chart header ── */
+.bb-shell--pro .bb-chart-head {
+  padding: .65rem .85rem;
+  background: var(--bb-pro-surface);
+  border-color: var(--bb-pro-border);
+}
+.bb-shell--pro .bb-chart-hero {
+  align-items: center;
+}
+.bb-shell--pro .bb-chart-hero-logo {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 10px;
+  border-color: var(--bb-pro-border);
+  box-shadow: none;
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-name {
+  color: var(--bb-pro-text);
+  font-size: 1.15rem;
+}
+.bb-shell--pro .bb-chart-sym-desc {
+  color: var(--bb-pro-muted);
+  font-size: .75rem;
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-chg {
+  font-size: .75rem;
+  border-radius: 6px;
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-chg.up {
+  color: var(--bb-pro-up);
+  background: rgba(52, 211, 153, 0.12);
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-chg.down {
+  color: var(--bb-pro-down);
+  background: rgba(251, 113, 133, 0.12);
+}
+.bb-shell--pro .bb-hero-analyze {
+  margin-left: .5rem;
+  align-self: center;
+  flex-shrink: 0;
+  font-family: var(--bb-sans);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--bb-pro-accent);
+  padding: .45rem .7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.06);
+  transition: background .15s, border-color .15s;
+}
+.bb-shell--pro .bb-hero-analyze:hover {
+  background: rgba(56, 189, 248, 0.14);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+.bb-shell--pro .bb-hero-analyze[hidden] {
+  display: none;
+}
+
+/* ── Chart controls (compact) ── */
+.bb-shell--pro .bb-chart-toolbar--pro {
+  padding: .45rem .85rem;
+  background: var(--bb-pro-surface);
+  border-bottom: 1px solid var(--bb-pro-border);
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+.bb-shell--pro .bb-control-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .65rem;
+}
+.bb-shell--pro .bb-control-sep {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--bb-pro-border);
+  flex-shrink: 0;
+}
+.bb-shell--pro .bb-periods {
+  background: var(--bb-pro-elevated);
+  border-color: var(--bb-pro-border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.bb-shell--pro .bb-period.active {
+  color: var(--bb-pro-text);
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+.bb-shell--pro .bb-tool-btn.active {
+  color: var(--bb-pro-accent);
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.1);
+}
+.bb-shell--pro .bb-chart-range {
+  margin-left: auto;
+  color: var(--bb-pro-muted);
+  font-size: .62rem;
+}
+.bb-shell--pro .bb-nav-drawer {
+  font-size: .65rem;
+  color: var(--bb-pro-muted);
+}
+.bb-shell--pro .bb-nav-drawer summary {
+  cursor: pointer;
+  list-style: none;
+  padding: .25rem 0;
+  user-select: none;
+}
+.bb-shell--pro .bb-nav-drawer summary::-webkit-details-marker {
+  display: none;
+}
+.bb-shell--pro .bb-nav-drawer[open] summary {
+  color: var(--bb-pro-accent);
+  margin-bottom: .35rem;
+}
+.bb-shell--pro .bb-nav-drawer .bb-chart-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+}
+
+/* ── Chart canvas frame ── */
+.bb-shell--pro .bb-chart-stack {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 .85rem 1rem;
+  border: 1px solid var(--bb-pro-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #030406;
+}
+.bb-shell--pro .bb-chart-container {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.bb-shell--pro .bb-ohlc {
+  top: .5rem;
+  right: .65rem;
+  left: auto;
+  background: rgba(10, 13, 18, 0.85);
+  border: 1px solid var(--bb-pro-border);
+  border-radius: 8px;
+  padding: .35rem .5rem;
+  backdrop-filter: blur(8px);
+}
+.bb-shell--pro .bb-chart-hint {
+  opacity: .45;
+  font-size: .58rem;
+}
+.bb-shell--pro #bbVolChart {
+  border-color: var(--bb-pro-border);
+  background: #030406;
+}
+
+/* ── Right panel ── */
+.bb-shell--pro .bb-pane-subhead {
+  background: transparent;
+  border-color: var(--bb-pro-border);
+  font-size: .62rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--bb-pro-muted);
+}
+.bb-shell--pro .bb-detail-hero {
+  margin: .55rem;
+  padding: .75rem;
+  border: 1px solid var(--bb-pro-border);
+  border-radius: 10px;
+  background: var(--bb-pro-elevated);
+}
+.bb-shell--pro .bb-detail-name {
+  color: var(--bb-pro-text);
+  font-size: 1rem;
+}
+.bb-shell--pro .bb-stats--detail {
+  margin: 0 .55rem .55rem;
+  border: 1px solid var(--bb-pro-border);
+  border-radius: 10px;
+  overflow: hidden;
+  gap: 0;
+  background: var(--bb-pro-border);
+}
+.bb-shell--pro .bb-stats--detail .bb-stat {
+  background: var(--bb-pro-elevated);
+  padding: .45rem .35rem;
+}
+.bb-shell--pro .bb-news-item {
+  margin: 0 .45rem .35rem;
+  padding: .55rem .6rem;
+  border: 1px solid var(--bb-pro-border);
+  border-radius: 8px;
+  border-bottom: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+}
+.bb-shell--pro .bb-news-item:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: #131a24;
+}
+.bb-shell--pro .bb-news-title {
+  font-family: var(--bb-sans);
+  font-size: .82rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ── Portfolio view ── */
+.bb-shell--pro .bb-port-strip {
+  gap: .5rem;
+  padding: .55rem .75rem;
+  border-color: var(--bb-pro-border);
+}
+.bb-shell--pro .bb-port-item {
+  flex: 1;
+  min-width: 7rem;
+  padding: .5rem .65rem;
+  border-radius: 10px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+}
+.bb-shell--pro .bb-port-item span {
+  display: block;
+  font-size: .58rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: .2rem;
+}
+.bb-shell--pro .bb-port-item strong {
+  font-size: 1rem;
+}
+.bb-shell--pro .bb-port-table thead th {
+  position: sticky;
+  top: 0;
+  background: #0d1118;
+  z-index: 2;
+  font-size: .58rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--bb-pro-muted);
+}
+.bb-shell--pro .bb-port-table tbody tr:hover {
+  background: rgba(56, 189, 248, 0.04);
+}
+
+.bb-shell--pro .bb-cmd-results {
+  border-radius: 10px;
+  border-color: var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* ═══ Modo inmersivo: ocultar barra duplicada del terminal (el ticker se mantiene) ═══ */
+.bb-terminal-immersive .bb-topbar,
+.bb-terminal-immersive .bb-indices-strip,
+.bb-terminal-immersive .bb-fx-strip {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-topbar,
+.forge-mode.page-investments .bb-shell--pro .bb-indices-strip,
+.forge-mode.page-investments .bb-shell--pro .bb-fx-strip {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-ticker {
+  display: flex !important;
+  flex-shrink: 0;
+}
+.page-investments .bb-shell--pro > .bb-news-ticker {
+  background: #050608;
+  border-top-color: var(--bb-pro-border);
+}
+.bb-shell--pro .bb-main {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--pro .bb-main {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+.bb-shell--pro .bb-news-ticker-label {
+  color: #64748b;
+  border-right-color: var(--bb-pro-border);
+}
+.bb-shell--pro .bb-news-tick-tag {
+  color: var(--bb-pro-accent);
+}
+.bb-shell--pro .bb-news-tick-title {
+  font-weight: 500;
+}
+
+.forge-mode.page-investments .bb-chrome {
+  background: #050608;
+  border-bottom: 1px solid #1c2433;
+  box-shadow: none;
+  height: 44px;
+}
+.forge-mode.page-investments .bb-chrome-mark {
+  border-radius: 8px;
+  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+  color: #041018;
+}
+.forge-mode.page-investments .bb-chrome-name {
+  color: #e2e8f0;
+  letter-spacing: .18em;
+}
+.forge-mode.page-investments .bb-chrome-tab.active {
+  color: #f8fafc;
+  background: rgba(56, 189, 248, 0.12);
+  border-radius: 6px;
+}
+
+.forge-mode.page-investments .bb-shell--pro .bb-workspace-tabs {
+  padding: .35rem .65rem .25rem;
+  border-bottom: none;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-main {
+  border-top: 1px solid var(--bb-pro-border);
+}
+
+.bb-shell--pro .bb-watch-tabs[hidden] {
+  display: none !important;
+}
+
+.bb-shell--pro .bb-chart-area {
+  background: var(--bb-pro-surface);
+}
+
+/* Cabecera y controles con aire (estilo plataforma broker) */
+.bb-shell--pro .bb-chart-head {
+  padding: .85rem 1rem .75rem;
+}
+.bb-shell--pro .bb-chart-toolbar--pro {
+  padding: .55rem 1rem .65rem;
+  border-bottom: none;
+}
+.bb-shell--pro .bb-control-bar {
+  gap: .65rem .85rem;
+}
+.bb-shell--pro .bb-chart-stack {
+  margin: 0 .85rem 1.15rem;
+  border: 1px solid var(--bb-pro-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #030406;
+}
+.bb-shell--pro .bb-watch .bb-panel-body,
+.bb-shell--pro .bb-info-section .bb-panel-body {
+  padding-bottom: 1.35rem;
+}
+
+/* Panel derecho: noticias arriba, cotización abajo (vertical) */
+.bb-shell--pro .bb-info-split {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+.bb-shell--pro .bb-info-news {
+  flex: 1 1 55% !important;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+.bb-shell--pro .bb-info-detail {
+  flex: 1 1 45% !important;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+}
+.bb-shell--pro:not(.bb-shell--tv) .bb-info-detail .bb-detail-hero {
+  display: none;
+}
+.bb-shell--pro .bb-info-section .bb-panel-body {
+  padding: .4rem .15rem .5rem;
+}
+.bb-shell--pro .bb-pane-subhead {
+  padding: .65rem .85rem;
+}
+.bb-shell--pro .bb-stats--detail {
+  margin: .65rem;
+}
+.bb-shell--pro .bb-stats--detail .bb-stat {
+  padding: .58rem .45rem;
+}
+.bb-shell--pro .bb-news-item {
+  margin: 0 .65rem .5rem;
+  padding: .65rem .75rem;
+}
+.bb-shell--pro .bb-analysis-cta {
+  margin: 0 .65rem .65rem;
+  padding: .75rem;
+  border-radius: 10px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+}
+.bb-shell--pro .bb-analysis-link {
+  color: var(--bb-pro-accent) !important;
+  font-weight: 700;
+  text-decoration: none;
+}
+.bb-shell--pro .bb-analysis-desc {
+  color: var(--bb-pro-muted);
+  font-size: .75rem;
+  margin: 0 0 .45rem;
+}
+
+/* Watchlist legible */
+.bb-shell--pro .bb-panel-head--watch h2 {
+  font-size: .68rem;
+}
+.bb-shell--pro .bb-head-meta {
+  font-size: .62rem;
+}
+.bb-shell--pro .bb-watch-search {
+  margin: .65rem .75rem 0;
+  width: calc(100% - 1.5rem);
+  padding: .55rem .65rem;
+}
+.bb-shell--pro .bb-watch-tabs {
+  padding: .55rem .75rem .45rem;
+}
+.bb-shell--pro #bbWatchlist {
+  padding: .5rem .65rem .85rem;
+}
+.bb-shell--pro .bb-watch-row {
+  padding: .55rem .65rem;
+  margin-bottom: 5px;
+}
+
+.bb-shell--pro .bb-chart-hint {
+  display: none;
+}
+
+/* Splitters alineados con padding del grid */
+.bb-shell--pro #bbResizeWatch {
+  left: calc(var(--bb-layout-pad) + var(--bb-watch-w, 288px) - 4px);
+}
+.bb-shell--pro #bbResizeInfo {
+  left: calc(100% - var(--bb-layout-pad) - var(--bb-info-w, 360px) - 4px);
+}
+
+.forge-mode.page-investments .bb-shell--pro .bb-workspace-tabs {
+  padding: .55rem 1rem .45rem;
+  gap: .5rem;
+}
+
+@media (min-width: 1101px) {
+  .forge-mode.page-investments .bb-shell--pro:not(.bb-shell--tv) .bb-chart-container {
+    min-height: min(50vh, 640px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .bb-shell--pro .bb-main {
+    padding: 8px 8px 16px;
+  }
+  .bb-shell--pro {
+    --bb-layout-pad: 8px;
+    --bb-layout-pad-b: 18px;
+    --bb-watch-w: 280px;
+    --bb-info-w: 100%;
+  }
+}
+
+/* ── Escala grande + reparto vertical (post-offset) ── */
+.bb-shell--pro .bb-ticker {
+  height: 42px;
+  min-height: 42px;
+}
+.bb-shell--pro .bb-tick {
+  height: 42px;
+  font-size: .82rem;
+  padding: 0 .85rem;
+  gap: .55rem;
+}
+.bb-shell--pro .bb-workspace-tabs {
+  padding: .65rem 1.1rem !important;
+  gap: .55rem !important;
+}
+.bb-shell--pro .bb-ws-tab {
+  padding: .55rem 1.4rem;
+  font-size: .78rem;
+}
+.bb-shell--pro .bb-tool-btn#bbLayoutBtn,
+.bb-shell--pro .bb-layout-reset {
+  padding: .5rem .85rem;
+  font-size: .72rem;
+}
+
+.bb-shell--pro .bb-panel-head {
+  padding: .8rem 1rem;
+}
+.bb-shell--pro .bb-panel-head h2 {
+  font-size: .72rem;
+}
+
+.bb-shell--pro .bb-watch-search {
+  font-size: var(--bb-fs-sm);
+  padding: .65rem .8rem !important;
+}
+.bb-shell--pro .bb-watch-tab {
+  padding: .4rem .55rem;
+  font-size: .68rem;
+}
+.bb-shell--pro .bb-watch-row {
+  grid-template-columns: 1.35rem minmax(3.5rem, 4.5rem) minmax(0, 1fr) auto;
+  gap: .45rem;
+  padding: .72rem .75rem !important;
+  margin-bottom: 8px !important;
+  font-size: var(--bb-fs-sm);
+  min-height: 46px;
+}
+.bb-shell--pro .bb-watch-sym {
+  font-size: .88rem;
+}
+.bb-shell--pro .bb-watch-price {
+  font-size: .85rem;
+}
+.bb-shell--pro .bb-watch-chg {
+  font-size: .78rem;
+  min-width: 3.5rem;
+}
+
+.bb-shell--pro .bb-chart-area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.bb-shell--pro .bb-chart-head {
+  flex-shrink: 0;
+  padding: 1rem 1.15rem .9rem !important;
+}
+.bb-chart-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .85rem 1.25rem;
+  width: 100%;
+}
+.bb-chart-search-wrap {
+  position: relative;
+  flex: 1 1 16rem;
+  max-width: 26rem;
+  min-width: min(100%, 14rem);
+  margin-left: auto;
+}
+.bb-chart-search-wrap .bb-cmd {
+  width: 100%;
+  padding-right: 2rem;
+}
+.bb-chart-search-results {
+  z-index: 80;
+  max-height: min(50vh, 22rem);
+}
+.forge-mode.page-investments .bb-chart-search-wrap .bb-cmd {
+  font-size: .85rem;
+  padding: .58rem .85rem;
+  border-radius: 10px;
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-name {
+  font-size: 1.28rem !important;
+}
+.bb-shell--pro .bb-chart-sym-desc {
+  font-size: .82rem !important;
+  max-width: 36ch;
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-price {
+  font-size: 1.75rem !important;
+}
+.bb-shell--pro .bb-chart-head .bb-symbol-chg {
+  font-size: .88rem !important;
+  padding: .2rem .5rem !important;
+}
+.bb-shell--pro .bb-chart-hero-logo {
+  width: 3rem !important;
+  height: 3rem !important;
+}
+
+.bb-shell--pro .bb-chart-toolbar--pro {
+  flex-shrink: 0;
+  padding: .7rem 1.15rem .8rem !important;
+}
+.bb-shell--pro .bb-chart-toolbar--pro .bb-period,
+.bb-shell--pro .bb-chart-toolbar--pro .bb-tool-btn {
+  padding: .42rem .72rem;
+  font-size: .74rem;
+}
+.bb-shell--pro .bb-periods {
+  padding: 4px;
+  gap: 3px;
+}
+.bb-shell--pro .bb-chart-range {
+  font-size: .72rem !important;
+}
+
+.bb-shell--pro .bb-chart-stack {
+  flex: 1 1 0;
+  min-height: 260px;
+  margin: 0 1rem 1.35rem !important;
+  display: flex;
+  flex-direction: column;
+}
+.bb-shell--pro .bb-chart-container {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.bb-shell--pro #bbVolChart {
+  height: var(--bb-vol-h, 88px);
+  min-height: 72px;
+}
+.bb-shell--pro .bb-ohlc {
+  font-size: .72rem;
+  padding: .45rem .6rem;
+}
+
+.bb-shell--pro .bb-pane-subhead {
+  padding: .8rem 1rem !important;
+  font-size: .72rem;
+}
+.bb-shell--pro .bb-news-title {
+  font-size: .9rem !important;
+  line-height: 1.45;
+}
+.bb-shell--pro .bb-news-meta {
+  font-size: .72rem;
+}
+.bb-shell--pro .bb-news-item {
+  padding: .8rem .9rem !important;
+  margin-bottom: .65rem !important;
+}
+.bb-shell--pro .bb-stat-label {
+  font-size: .68rem;
+}
+.bb-shell--pro .bb-stat-val {
+  font-size: .95rem;
+}
+.bb-shell--pro .bb-stats--detail .bb-stat {
+  padding: .72rem .55rem !important;
+}
+
+.page-investments .bb-shell--pro > .bb-news-ticker {
+  height: var(--bb-news-bar-h, 48px);
+}
+.bb-shell--pro .bb-news-ticker-label {
+  font-size: .68rem;
+  padding: 0 .85rem;
+}
+.bb-shell--pro .bb-news-tick {
+  font-size: .8rem;
+  padding: 0 1rem;
+  gap: .6rem;
+}
+.bb-shell--pro .bb-news-tick-title {
+  font-size: .85rem;
+}
+
+.bb-shell--pro #bbResizeWatch {
+  left: calc(var(--bb-layout-pad) + var(--bb-watch-w, 324px) - 4px);
+}
+.bb-shell--pro #bbResizeInfo {
+  left: calc(100% - var(--bb-layout-pad) - var(--bb-info-w, 408px) - 4px);
+}
+
+/* ── /inversiones: llenar alto (sin hueco negro) + noticias fijas abajo ── */
+.page-investments .bb-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.page-investments .bb-shell > .bb-workspace-tabs {
+  flex-shrink: 0;
+}
+.page-investments .bb-shell > .bb-ticker {
+  flex-shrink: 0;
+}
+.page-investments .bb-price-ticker .bb-ticker-label {
+  color: #64748b;
+  border-right-color: var(--bb-pro-border);
+  background: #050608;
+}
+.page-investments .bb-shell > .bb-price-ticker {
+  background: #050608;
+  border-bottom-color: var(--bb-pro-border);
+}
+.page-investments .bb-shell > .bb-main {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+}
+.page-investments .bb-main > .bb-chart-area,
+.page-investments .bb-main > .bb-rail {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+.page-investments .bb-chart-area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.page-investments .bb-chart-head,
+.page-investments .bb-chart-toolbar--pro {
+  flex-shrink: 0;
+}
+.page-investments .bb-chart-stack {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+}
+.page-investments .bb-chart-container {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+}
+.page-investments .bb-info-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.page-investments .bb-info-split {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+}
+.page-investments .bb-info-section .bb-panel-body {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* ═══ Layout TradingView: gráfica ancha + rail derecho apilado ═══ */
+.bb-shell--tv .bb-main.bb-view-market,
+.bb-shell--tv .bb-main.bb-view-indices,
+.bb-shell--tv .bb-main.bb-view-fx {
+  grid-template-columns: minmax(0, 1fr) var(--bb-rail-w, 420px);
+  grid-template-areas: "chart rail";
+}
+.bb-shell--tv .bb-chart-area {
+  grid-area: chart;
+}
+.bb-shell--tv .bb-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+  background: var(--bb-pro-surface);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--bb-pro-border);
+  overflow: hidden;
+}
+.bb-shell--tv .bb-rail > .bb-watch {
+  flex: 0 0 var(--bb-watch-rail-pct, 36%);
+  min-height: 140px;
+  max-height: 55%;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--bb-pro-border);
+}
+.bb-shell--tv .bb-rail > .bb-info-panel {
+  flex: 1 1 0;
+  min-height: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.bb-shell--tv #bbResizeRailWatch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--bb-watch-rail-pct, 36%);
+  margin-top: -4px;
+  z-index: 6;
+}
+.bb-shell--tv #bbResizeInfo {
+  left: calc(100% - var(--bb-layout-pad) - var(--bb-rail-w, 420px) - 4px);
+}
+.bb-shell--tv .bb-info-detail .bb-detail-hero {
+  display: block !important;
+  margin: 0 .65rem .55rem;
+  padding: .7rem .8rem;
+  border-radius: 10px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+}
+.bb-shell--tv .bb-detail-price {
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+.bb-shell--tv .bb-info-detail {
+  flex: 0 0 var(--bb-detail-pct, 38%) !important;
+  min-height: 100px;
+}
+.bb-shell--tv .bb-info-news {
+  flex: 1 1 0 !important;
+  min-height: 100px;
+}
+.bb-shell--tv .bb-info-split .bb-resize-row#bbResizeNews {
+  top: var(--bb-detail-pct, 38%);
+}
+.bb-shell--tv .bb-news-item {
+  border-left: 3px solid rgba(56, 189, 248, 0.45);
+}
+.bb-shell--tv .bb-main.bb-view-portfolio {
+  grid-template-columns: var(--bb-rail-w, 360px) minmax(0, 1fr);
+  grid-template-areas: "rail port";
+}
+.bb-shell--tv .bb-view-portfolio .bb-chart-area {
+  display: none !important;
+}
+.bb-shell--tv .bb-view-portfolio .bb-info-panel,
+.bb-shell--tv .bb-view-portfolio #bbResizeRailWatch,
+.bb-shell--tv .bb-view-portfolio #bbResizeNews {
+  display: none !important;
+}
+.bb-shell--tv .bb-view-portfolio .bb-rail > .bb-watch {
+  flex: 1 1 auto !important;
+  max-height: none !important;
+}
+.bb-shell--tv .bb-view-portfolio #bbResizeInfo {
+  left: calc(var(--bb-layout-pad) + var(--bb-rail-w, 360px) - 4px);
+}
+
+/* Gráfica pegada bajo controles, llenando el alto (sin hueco negro) */
+.bb-shell--tv .bb-chart-area {
+  padding-top: 0;
+  justify-content: flex-start;
+  gap: 0;
+}
+.bb-shell--tv .bb-chart-head {
+  padding: .45rem 1rem .35rem !important;
+}
+.bb-shell--tv .bb-chart-hero-logo {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+}
+.bb-shell--tv .bb-chart-head .bb-symbol-name {
+  font-size: 1.1rem !important;
+}
+.bb-shell--tv .bb-chart-head .bb-symbol-price {
+  font-size: 1.5rem !important;
+}
+.bb-shell--tv .bb-chart-toolbar--pro {
+  padding: .3rem 1rem .35rem !important;
+  margin-bottom: 0;
+}
+.bb-shell--tv .bb-chart-stack {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  margin: .4rem .7rem .5rem !important;
+  align-self: stretch;
+}
+.bb-shell--tv .bb-chart-container {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+}
+.bb-shell--tv #bbChart {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+}
+.bb-shell--tv #bbVolChart {
+  flex-shrink: 0;
+  height: var(--bb-vol-h, 76px);
+}
+
+/* ═══ Forge /inversiones: scroll vertical (como dashboard), no pantalla fija ═══ */
+.forge-mode.page-investments {
+  --bb-layout-pad: 18px;
+  --bb-layout-pad-b: 22px;
+  --bb-pane-h: calc(
+    100dvh - var(--bb-chrome-h, 44px) - var(--bb-ticker-fixed-h, 42px)
+      - var(--bb-invest-header-gap, 6px) - var(--bb-ws-tabs-h, 3rem) - var(--bb-news-bar-h, 48px)
+      - 1.35rem
+  );
+}
+.forge-mode.page-investments .bb-shell--pro {
+  gap: 14px;
+  padding-top: 0;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-main {
+  flex: 1 1 auto;
+  height: auto !important;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--bb-layout-pad) var(--bb-layout-pad) var(--bb-layout-pad-b);
+  -webkit-overflow-scrolling: touch;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--pro .bb-main {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+.forge-mode.page-investments .bb-shell > .bb-main,
+.forge-mode.page-investments .bb-shell--scroll > .bb-main {
+  flex: 1 1 auto;
+  height: auto !important;
+  min-height: 0 !important;
+}
+/* Altura acotada: sin esto el main crece y el padre recorta sin scrollbar */
+.forge-mode.page-investments .bb-shell--scroll > .bb-main.bb-view-market,
+.forge-mode.page-investments .bb-shell--scroll > .bb-main.bb-view-indices,
+.forge-mode.page-investments .bb-shell--scroll > .bb-main.bb-view-fx {
+  flex: 1 1 0% !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main > .bb-chart-area,
+.forge-mode.page-investments .bb-shell--scroll .bb-main > .bb-rail {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main > .bb-chart-area {
+  min-height: 0;
+}
+.forge-mode.page-investments .bb-main > .bb-rail {
+  min-height: 0;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-container {
+  min-height: 0 !important;
+}
+.forge-mode.page-investments .bb-shell--tv .bb-rail {
+  overflow: visible;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-rail > .bb-watch {
+  flex: 0 0 var(--bb-watch-rail-flex, 42%);
+  min-height: 16rem;
+  max-height: none;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-rail > .bb-info-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.forge-mode.page-investments .bb-shell--pro #bbWatchlist {
+  max-height: none;
+  min-height: 12rem;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-workspace-tabs {
+  padding: .65rem 1rem .55rem;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-chart-head {
+  padding: 1rem 1.2rem .85rem !important;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-chart-toolbar--pro {
+  padding: .75rem 1.2rem .85rem !important;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-chart-stack {
+  margin: 0 1rem 1.5rem !important;
+}
+.forge-mode.page-investments .bb-shell--pro .bb-main:not(.bb-view-market):not(.bb-view-indices):not(.bb-view-fx) {
+  overflow: visible;
+}
+
+/* Deck de widgets bajo la gráfica — scroll en .bb-main; workspace (gráfica+rail) pegado arriba */
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-main.bb-view-market,
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-main.bb-view-indices,
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-main.bb-view-fx {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+  grid-area: workspace;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "chart"
+    "rail";
+  gap: 1rem;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+  position: static;
+  top: auto;
+  z-index: auto;
+  align-self: start;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  background: var(--bb-pro-bg, #050608);
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main > .bb-chart-area {
+  min-height: 0;
+  height: auto;
+  min-width: 0;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+    grid-template-columns: minmax(0, 58%) minmax(300px, var(--bb-rail-w, 420px));
+    grid-template-areas: "chart rail";
+    gap: 1.15rem;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-chart-area {
+    grid-area: chart;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-rail {
+    grid-area: rail;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-watch {
+    flex: 0 0 var(--bb-watch-rail-flex, 42%);
+    max-height: none;
+    min-height: 16rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-info-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 0.85rem;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-split {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-detail,
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-news,
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-calendar-wrap {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+  .forge-mode.page-investments .bb-shell--scroll #bbWatchlist {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-info-detail {
+    flex: 1 1 auto !important;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-info-news,
+  .forge-mode.page-investments .bb-shell--scroll #bbResizeNews,
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-info-calendar-wrap {
+    display: none !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-rail > .bb-info-panel,
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-info-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-info-section .bb-panel-body {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-info-detail .bb-panel-body {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-info-detail {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+}
+/* Rail apilado en móvil/tablet (<1180px) */
+@media (max-width: 1179px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-rail {
+    min-height: 0;
+    height: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "watch"
+      "detail"
+      "calendar";
+    gap: 1rem;
+    align-items: start;
+    overflow: visible;
+    padding: .25rem 0 1rem;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-watch {
+    grid-area: watch;
+    min-height: 16rem;
+    max-height: none;
+    flex: none;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-info-panel {
+    display: contents;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-split {
+    display: contents;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-detail {
+    grid-area: detail;
+    flex: none !important;
+    min-height: 0;
+    border-radius: 12px;
+    overflow: visible;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-news {
+    display: none !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-info-calendar-wrap {
+    grid-area: calendar;
+    border-radius: 12px;
+    border: 1px solid var(--bb-pro-border);
+    background: var(--bb-pro-surface);
+    margin: 0;
+  }
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-info-section {
+  background: var(--bb-pro-surface);
+  box-shadow: 0 0 0 1px var(--bb-pro-border);
+  border-bottom: none;
+  overflow: visible;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-info-section .bb-panel-body {
+  flex: none;
+  max-height: none;
+  overflow: visible;
+  padding: .85rem 1rem 1.15rem;
+}
+.forge-mode.page-investments .bb-shell--scroll #bbWatchlist {
+  min-height: 0;
+  max-height: none;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-analysis-cta {
+  display: none;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-info-news,
+.forge-mode.page-investments .bb-shell--scroll #bbResizeNews {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-detail-hero {
+  padding: .85rem 1rem 1rem;
+  margin: 0 1rem .75rem;
+  border-radius: 12px;
+  background: var(--bb-pro-elevated);
+  border: 1px solid var(--bb-pro-border);
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-detail-price {
+  font-size: 1.65rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-stats--detail {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .55rem;
+  margin: 0 1rem 1rem;
+  border-top: none;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-stats--detail .bb-stat {
+  padding: .75rem .55rem;
+  border-radius: 10px;
+  background: var(--bb-pro-elevated);
+  border: 1px solid var(--bb-pro-border);
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-stat-label {
+  font-size: .68rem;
+  letter-spacing: .08em;
+  margin-bottom: .35rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-stat-val {
+  font-size: .95rem;
+  font-weight: 700;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-news-item {
+  margin: 0 1rem .65rem;
+  padding: .8rem .85rem;
+  border-radius: 10px;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-pane-subhead {
+  padding: .85rem 1rem;
+}
+.forge-mode.page-investments .bb-shell--scroll:not(.bb-layout-edit) #bbResizeRailWatch,
+.forge-mode.page-investments .bb-shell--scroll:not(.bb-layout-edit) #bbResizeNews,
+.forge-mode.page-investments .bb-shell--scroll:not(.bb-layout-edit) #bbResizeInfo,
+.forge-mode.page-investments .bb-shell--scroll:not(.bb-layout-edit) #bbResizeChart {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-workspace-pane {
+  position: relative !important;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit #bbResizeChart,
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit #bbResizeRailWatch,
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit #bbResizeInfo {
+  display: block !important;
+  z-index: 45;
+  pointer-events: auto;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit #bbResizeNews {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-info-calendar-wrap summary {
+  padding: .85rem 1rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-info-calendar-wrap .bb-panel-body {
+  max-height: none;
+  padding: 0 1rem 1rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-analysis-cta {
+  margin: 0 1rem 1rem;
+}
+
+/* Portafolio: analytics y tabla con aire al hacer scroll */
+.forge-mode.page-investments .bb-shell--scroll .bb-main.bb-view-portfolio {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "port";
+  gap: 1rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main.bb-view-portfolio .bb-workspace-pane {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-portfolio-panel {
+  min-height: 0;
+  border-radius: 12px;
+  overflow: visible;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-port-strip {
+  padding: 1rem 1.15rem;
+  gap: 1rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-port-analytics:not([hidden]) {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+  padding: 0 1rem 1rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-pa-item {
+  padding: .75rem .65rem;
+  border-radius: 10px;
+  background: var(--bb-pro-elevated);
+  border: 1px solid var(--bb-pro-border);
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-port-body-full {
+  max-height: none;
+  overflow: visible;
+  padding: 0 1rem 1.5rem;
+}
+
+/* Widgets Yahoo debajo de la gráfica */
+.bb-widgets-deck {
+  margin: 0 1rem 1.75rem;
+  padding: 1.15rem 1.2rem 1.35rem;
+  border-radius: 14px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-surface);
+}
+.bb-widgets-deck-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem 1.25rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.bb-widgets-deck-titles {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+.bb-widgets-title {
+  margin: 0;
+  font-size: .72rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--bb-pro-muted);
+  font-weight: 700;
+}
+.bb-widgets-deck-sub {
+  margin: .35rem 0 0;
+  font-size: .78rem;
+  color: var(--bb-pro-text);
+  opacity: 0.72;
+  line-height: 1.35;
+}
+.bb-widgets-source {
+  flex-shrink: 0;
+  font-size: .62rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--bb-pro-accent);
+  font-family: var(--bb-mono);
+  padding: .35rem .65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(56, 189, 248, 0.06);
+}
+.bb-widgets-status {
+  margin: 0 0 .75rem;
+  font-size: .8rem;
+  color: var(--bb-pro-muted);
+}
+.bb-widgets-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+  grid-auto-rows: min-content;
+}
+@media (min-width: 1400px) {
+  .forge-mode.page-investments .bb-widgets-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+.bb-widget-card {
+  padding: 1rem 1.05rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+  min-width: 0;
+  height: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  isolation: isolate;
+}
+.bb-widget-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: visible;
+}
+.bb-widget-body > h3 {
+  flex-shrink: 0;
+  margin-top: 0;
+}
+.bb-widget-google {
+  grid-column: 1 / -1;
+}
+.bb-widget-google .bb-widget-body {
+  max-height: none;
+  overflow: visible;
+}
+.bb-widget-profile .bb-widget-body,
+.bb-widget-health .bb-widget-body {
+  max-height: none;
+  overflow: visible;
+}
+.bb-widget-card h3 {
+  margin: 0 0 .85rem;
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--bb-pro-text);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.bb-widget-tag {
+  font-size: .58rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--bb-pro-accent);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  padding: .12rem .4rem;
+  border-radius: 999px;
+}
+.bb-widget-tag--google {
+  color: #93c5fd;
+  border-color: rgba(147, 197, 253, 0.4);
+}
+.bb-widget-tag--tv {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
+}
+.bb-w-news-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.bb-w-news-list a {
+  display: block;
+  padding: .55rem .6rem;
+  border-radius: 8px;
+  border: 1px solid var(--bb-pro-border);
+  text-decoration: none;
+  color: inherit;
+}
+.bb-w-news-list a:hover {
+  border-color: rgba(147, 197, 253, 0.35);
+  background: rgba(147, 197, 253, 0.06);
+}
+.bb-w-news-meta {
+  display: block;
+  font-size: .62rem;
+  color: var(--bb-pro-muted);
+  margin-bottom: .2rem;
+}
+.bb-w-news-title {
+  font-size: .8rem;
+  line-height: 1.35;
+  color: var(--bb-pro-text);
+}
+.bb-w-health-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+.bb-w-health-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: .5rem;
+  font-size: .74rem;
+  padding: .4rem .5rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.bb-w-health-list li.ok em { color: var(--bb-pro-up); }
+.bb-w-health-list li.bad em { color: var(--bb-pro-down); }
+.bb-w-health-list span { color: var(--bb-pro-muted); }
+.bb-w-profile-text {
+  font-size: .78rem;
+  line-height: 1.45;
+  color: var(--bb-pro-muted);
+  margin: 0 0 .5rem;
+}
+.bb-w-profile-link {
+  font-size: .72rem;
+  color: var(--bb-pro-accent);
+}
+.bb-w-margin-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+.bb-w-margin {
+  flex: 1 1 4.5rem;
+  padding: .5rem;
+  border-radius: 8px;
+  border: 1px solid var(--bb-pro-border);
+  text-align: center;
+}
+.bb-w-margin span {
+  display: block;
+  font-size: .62rem;
+  color: var(--bb-pro-muted);
+}
+.bb-w-margin strong {
+  font-family: var(--bb-mono);
+  font-size: .85rem;
+}
+.bb-tv-embed {
+  height: 425px;
+  min-height: 425px;
+  max-height: 425px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #030406;
+}
+.bb-tv-embed--tall {
+  height: 520px;
+  min-height: 520px;
+  max-height: 520px;
+}
+.bb-widget-tv-tech,
+.bb-widget-tv-info {
+  overflow: hidden;
+}
+.bb-widget-tv-tech .bb-widget-body,
+.bb-widget-tv-info .bb-widget-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.bb-widget-tv-tech .bb-tv-embed,
+.bb-widget-tv-info .bb-tv-embed {
+  flex: none;
+}
+.bb-widget-tv-tech .tradingview-widget-container,
+.bb-widget-tv-info .tradingview-widget-container,
+.bb-widget-tv-tech .tradingview-widget-container__widget,
+.bb-widget-tv-info .tradingview-widget-container__widget {
+  height: 100% !important;
+  min-height: 0;
+}
+.bb-widget-trends .bb-widget-body {
+  max-height: none;
+  overflow: visible;
+}
+.bb-widget-table-scroll {
+  overflow-x: auto;
+  margin: 0 -0.15rem;
+  padding: 0 0.15rem;
+}
+.bb-w-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .5rem;
+}
+.bb-w-stat {
+  padding: .55rem .5rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--bb-pro-border);
+}
+.bb-w-stat span {
+  display: block;
+  font-size: .62rem;
+  color: var(--bb-pro-muted);
+  margin-bottom: .25rem;
+}
+.bb-w-stat strong {
+  font-size: .82rem;
+  font-family: var(--bb-mono);
+}
+.bb-w-an-hero {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+  margin-bottom: .75rem;
+}
+.bb-w-an-hero span {
+  display: block;
+  font-size: .62rem;
+  color: var(--bb-pro-muted);
+}
+.bb-w-an-hero strong {
+  font-size: .88rem;
+  font-family: var(--bb-mono);
+}
+.bb-w-an-hero strong.up { color: var(--bb-pro-up); }
+.bb-w-an-hero strong.down { color: var(--bb-pro-down); }
+.bb-w-an-bars { display: flex; flex-direction: column; gap: .35rem; }
+.bb-w-an-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 1.5rem;
+  gap: .4rem;
+  align-items: center;
+  font-size: .68rem;
+  color: var(--bb-pro-muted);
+}
+.bb-w-an-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.bb-w-an-track i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+.bb-w-an-row em {
+  font-style: normal;
+  font-family: var(--bb-mono);
+  text-align: right;
+}
+.bb-w-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .74rem;
+}
+.bb-w-table th,
+.bb-w-table td {
+  padding: .4rem .35rem;
+  border-bottom: 1px solid var(--bb-pro-border);
+}
+.bb-w-table th {
+  color: var(--bb-pro-muted);
+  font-weight: 600;
+  text-align: left;
+}
+.bb-w-table .num { text-align: right; font-family: var(--bb-mono); }
+.bb-w-table .num.up { color: var(--bb-pro-up); }
+.bb-w-table .num.down { color: var(--bb-pro-down); }
+.bb-w-div-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+  margin-bottom: .75rem;
+}
+.bb-w-div-summary span {
+  display: block;
+  font-size: .62rem;
+  color: var(--bb-pro-muted);
+}
+.bb-w-div-summary strong {
+  font-family: var(--bb-mono);
+  font-size: .85rem;
+}
+.bb-widget-foot,
+.bb-widget-note {
+  margin: .65rem 0 0;
+  font-size: .7rem;
+  color: var(--bb-pro-muted);
+}
+.forge-mode.page-investments .bb-widgets-deck {
+  margin: 0 1.2rem 2rem;
+}
+
+/* ── Pulido layout /inversiones (scroll + deck) ── */
+@keyframes bb-terminal-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes bb-widgets-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.bb-terminal-immersive:not(.bb-ready) .bb-workspace-tabs,
+.bb-terminal-immersive:not(.bb-ready) .bb-main {
+  opacity: 0;
+}
+.bb-terminal-immersive.bb-ready .bb-workspace-tabs,
+.bb-terminal-immersive.bb-ready .bb-main {
+  animation: bb-terminal-in 0.5s ease-out both;
+}
+.bb-terminal-immersive.bb-ready .bb-main {
+  animation-delay: 0.04s;
+}
+/* Pestañas Mercado/Índices… pegadas al ticker (sin hueco negro) — ver bloque encabezados al final */
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-area {
+  border-radius: 16px;
+  border: 1px solid var(--bb-pro-border);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(56, 189, 248, 0.06), transparent 55%),
+    var(--bb-pro-surface);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  margin-bottom: 0 !important;
+  border-radius: 0 0 12px 12px;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-container {
+  flex: 1 1 auto;
+  min-height: 0 !important;
+}
+.forge-mode.page-investments .bb-shell--scroll #bbChart {
+  min-height: 0;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-stats--detail {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-detail-hero {
+    margin: 0 0.75rem 0.65rem;
+    padding: 0.75rem 0.85rem;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-day-range {
+    margin-top: 0.35rem;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-day-track {
+    min-width: 0;
+    flex: 1 1 4rem;
+    max-width: 100%;
+  }
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main > .bb-widgets-deck--bottom {
+  grid-area: widgets;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto 3rem;
+  border-radius: 16px;
+  border: 1px solid var(--bb-pro-border);
+  background: linear-gradient(180deg, rgba(10, 13, 18, 0.98) 0%, #0a0d12 100%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
+  padding: 1.35rem 1.35rem 1.75rem;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+  align-self: start;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-view-portfolio .bb-widgets-deck--bottom {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-widgets-deck--bottom .bb-widgets-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-watch,
+.forge-mode.page-investments .bb-shell--scroll .bb-info-section,
+.forge-mode.page-investments .bb-shell--scroll .bb-info-calendar-wrap {
+  border-radius: 14px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-watch {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-info-panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.bb-widgets-deck.bb-widgets-loading .bb-widgets-grid {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: saturate(0.85);
+}
+.bb-widgets-deck.bb-widgets-loading .bb-widgets-status {
+  animation: bb-widgets-pulse 1.2s ease-in-out infinite;
+}
+.bb-widget-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.bb-widget-card:hover {
+  border-color: rgba(56, 189, 248, 0.22);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+.bb-terminal-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.bb-data-fresh {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bb-pro-muted);
+  font-family: var(--bb-mono);
+  vertical-align: middle;
+}
+.bb-data-fresh.stale {
+  color: #fbbf24;
+}
+.bb-widgets-status.bb-widgets-warn {
+  color: #fbbf24;
+}
+.bb-chrome-alerts {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+}
+.bb-chrome-alerts[hidden] {
+  display: none !important;
+}
+.bb-layout-edit .bb-rail::before {
+  content: 'Arrastra los bordes entre paneles para cambiar tamaños';
+  display: block;
+  font-size: 0.72rem;
+  color: var(--bb-pro-accent);
+  padding: 0.35rem 0.85rem 0.55rem;
+  grid-column: 1 / -1;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-rail.bb-layout-edit-hint::before,
+.bb-layout-edit.forge-mode.page-investments .bb-shell--scroll .bb-rail::before {
+  display: block;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-rail::before {
+  display: none;
+}
+#bbTerminal.bb-layout-edit .bb-rail::before {
+  display: block;
+}
+#bbTerminal.bb-layout-edit .bb-chart-area::after {
+  content: 'Borde entre velas y volumen: arrastra la línea horizontal';
+  display: block;
+  font-size: 0.68rem;
+  color: var(--bb-pro-accent);
+  padding: 0.2rem 1rem 0.45rem;
+  flex-shrink: 0;
+}
+#bbTerminal.bb-layout-edit .bb-workspace-pane::after {
+  content: 'Borde gráfica | panel derecho: arrastra la línea vertical entre columnas';
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1.35rem;
+  font-size: 0.65rem;
+  color: var(--bb-pro-muted);
+  text-align: center;
+  pointer-events: none;
+}
+@media (max-width: 1100px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-chart-area {
+    min-height: min(50vh, 520px);
+  }
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main.bb-view-portfolio .bb-portfolio-panel {
+  border-radius: 16px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+/* Modo ajustar — widgets arrastrables */
+.bb-widgets-deck.bb-widgets-edit {
+  outline: 1px dashed rgba(56, 189, 248, 0.35);
+  outline-offset: 4px;
+}
+.bb-widget-chrome {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  margin: -0.35rem 0 .65rem;
+  padding-bottom: .45rem;
+  border-bottom: 1px solid var(--bb-pro-border);
+}
+.bb-layout-edit .bb-widget-chrome {
+  display: flex;
+}
+.bb-widget-grip {
+  cursor: grab;
+  color: var(--bb-pro-muted);
+  font-size: .85rem;
+  letter-spacing: -0.15em;
+  user-select: none;
+  padding: .2rem .35rem;
+}
+.bb-widget-card.bb-widget-dragging {
+  opacity: 0.55;
+}
+.bb-widget-card.bb-widget-drop-target {
+  outline: 2px solid var(--bb-pro-accent);
+  outline-offset: 2px;
+}
+.bb-layout-edit .bb-widget-card.bb-widget-editable {
+  cursor: grab;
+  position: relative;
+}
+.bb-widget-chrome-actions {
+  display: flex;
+  gap: .25rem;
+}
+.bb-widget-span-btn {
+  border: 1px solid var(--bb-pro-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--bb-pro-muted);
+  font-size: .72rem;
+  padding: .2rem .45rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.bb-widget-span-btn.active {
+  color: var(--bb-pro-accent);
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.1);
+}
+.bb-widget-remove-btn {
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  background: rgba(251, 113, 133, 0.12);
+  color: #fda4af;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+.bb-widget-remove-btn:hover {
+  background: rgba(251, 113, 133, 0.22);
+}
+.bb-widgets-hidden-tray {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.06);
+}
+.bb-widgets-hidden-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--bb-pro-muted);
+}
+.bb-widget-restore-btn {
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-elevated);
+  color: var(--bb-pro-text);
+  font-size: 0.72rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.bb-widget-restore-btn:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: var(--bb-pro-accent);
+}
+.bb-widget-resize {
+  display: none;
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  border-right: 2px solid var(--bb-pro-muted);
+  border-bottom: 2px solid var(--bb-pro-muted);
+  opacity: 0.7;
+}
+.bb-layout-edit .bb-widget-resize {
+  display: block;
+}
+.bb-layout-edit .bb-widget-resize.bb-dragging,
+.bb-layout-edit .bb-widget-resize:hover {
+  border-color: var(--bb-pro-accent);
+  opacity: 1;
+}
+.bb-widgets-edit-hint {
+  display: none;
+  font-size: .72rem;
+  color: var(--bb-pro-accent);
+  margin: 0 0 .75rem;
+}
+.bb-widgets-deck.bb-widgets-edit .bb-widgets-edit-hint {
+  display: block;
+}
+
+@media (max-width: 1100px) {
+  .bb-widgets-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "watch"
+      "detail"
+      "calendar";
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-stats--detail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-port-analytics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ═══ /inversiones layout v3: scroll en .bb-main; gráfica+rail NO pegados (sin sticky) ═══ */
+.forge-mode.page-investments .bb-shell--scroll {
+  --bb-invest-workspace-max: calc(
+    100dvh - var(--bb-chrome-h, 44px) - var(--bb-ticker-fixed-h, 42px) - var(--bb-invest-header-gap, 0px)
+      - var(--bb-ws-tabs-h, 3.15rem) - var(--bb-news-bar-h, 48px) - 0.85rem
+  );
+  --bb-chart-body-min: min(38vh, 420px, calc(var(--bb-invest-workspace-max) - 11rem));
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-main.bb-view-market,
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-main.bb-view-indices,
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--tv .bb-main.bb-view-fx {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  grid-template: none !important;
+  gap: 1.25rem !important;
+  flex: 1 1 0% !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+  grid-area: unset !important;
+  order: 1 !important;
+  position: static !important;
+  top: auto !important;
+  z-index: 1 !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: var(--bb-invest-workspace-max) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+  isolation: auto !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-invest-widgets-scroll {
+  grid-area: unset !important;
+  order: 2 !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-invest-widgets-scroll > .bb-widgets-deck--bottom {
+  margin: 0 auto 2.5rem !important;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+    grid-template-columns: minmax(0, 58%) minmax(300px, var(--bb-rail-w, 420px));
+    grid-template-areas: "chart rail";
+    gap: 1.15rem;
+    align-items: stretch;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-chart-area {
+    grid-area: chart;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-rail {
+    grid-area: rail;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-chart-area {
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
+    flex: 1 1 auto !important;
+    min-height: var(--bb-chart-body-min) !important;
+    overflow: hidden !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-chart-container {
+    flex: 1 1 auto !important;
+    min-height: calc(var(--bb-chart-body-min) - 4.5rem) !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll #bbChart {
+    flex: 1 1 auto !important;
+    min-height: calc(var(--bb-chart-body-min) - 5.5rem) !important;
+    height: auto !important;
+    overflow: hidden !important;
+  }
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main.bb-view-portfolio {
+  display: grid !important;
+  grid-template-areas: "port" !important;
+  overflow-y: auto !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-main.bb-view-portfolio .bb-workspace-pane,
+.forge-mode.page-investments .bb-shell--scroll .bb-main.bb-view-portfolio .bb-invest-widgets-scroll {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell.bb-shell--scroll {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* ═══ Encabezados /inversiones: chrome → ticker → tabs (sin choque) ═══ */
+.forge-mode.page-investments {
+  --bb-ticker-fixed-h: 42px;
+  /* Hueco visible entre cinta de precios y pestañas Mercado/Índices… */
+  --bb-invest-header-gap: 6px;
+  --bb-ws-tabs-h: 3rem;
+}
+.forge-mode.page-investments .shell {
+  padding-top: 0;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-shell--pro {
+  gap: 0;
+}
+.forge-mode.page-investments .bb-shell > .bb-price-ticker {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--bb-chrome-h, 44px);
+  z-index: 284;
+  box-sizing: border-box;
+  height: var(--bb-ticker-fixed-h, 42px) !important;
+  min-height: var(--bb-ticker-fixed-h, 42px) !important;
+  max-height: var(--bb-ticker-fixed-h, 42px) !important;
+  margin: 0 !important;
+  overflow: hidden;
+  border-bottom: 1px solid var(--bb-pro-border);
+  box-shadow: none;
+}
+.forge-mode.page-investments .bb-shell > .bb-workspace-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(
+    var(--bb-chrome-h, 44px) + var(--bb-ticker-fixed-h, 42px) + var(--bb-invest-header-gap, 0px)
+  );
+  z-index: 283;
+  margin: 0 !important;
+  padding: 0.38rem var(--bb-invest-scroll-pad-x, 1.15rem) 0.34rem !important;
+  min-height: var(--bb-ws-tabs-h);
+  box-sizing: border-box;
+  align-items: center;
+  gap: 0.35rem;
+  background: #06080c;
+  border-top: none;
+  border-bottom: 1px solid var(--bb-pro-border);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+}
+.forge-mode.page-investments .bb-shell > .bb-workspace-tabs .bb-ws-tab {
+  margin: 0;
+  line-height: 1.2;
+}
+.forge-mode.page-investments .bb-price-ticker .bb-ticker-label {
+  min-width: 4.5rem;
+  justify-content: center;
+  color: #38bdf8;
+  letter-spacing: 0.1em;
+}
+.forge-mode.page-investments .bb-shell > .bb-main.bb-view-market,
+.forge-mode.page-investments .bb-shell > .bb-main.bb-view-indices,
+.forge-mode.page-investments .bb-shell > .bb-main.bb-view-fx,
+.forge-mode.page-investments .bb-shell > .bb-main.bb-view-portfolio {
+  margin-top: 0 !important;
+  border-top: none !important;
+  padding-bottom: calc(var(--bb-news-bar-h, 48px) + 1.25rem) !important;
+  box-sizing: border-box;
+  scroll-padding-bottom: calc(var(--bb-news-bar-h, 48px) + 1rem);
+}
+.forge-mode.page-investments .bb-ws-actions {
+  display: none;
+}
+.forge-mode.page-investments #bbChromeLayout .bb-layout-btn.active,
+.forge-mode.page-investments #bbChromeLayout .bb-layout-reset:not([hidden]) {
+  border-color: rgba(56, 189, 248, 0.55);
+  color: var(--bb-pro-accent, #38bdf8);
+}
+.forge-mode.page-investments .bb-shell--pro .bb-main {
+  padding-top: 0.35rem;
+}
+/* ── Rail ancho + watchlist grande + encabezado gráfica visible ── */
+.forge-mode.page-investments .bb-shell--scroll {
+  --bb-rail-w: min(460px, 34vw);
+  --bb-watch-rail-flex: 42%;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+  max-width: none !important;
+  width: 100% !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-area {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-head,
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-toolbar--pro,
+.forge-mode.page-investments .bb-shell--scroll .bb-nav-drawer {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
+  flex: 1 1 auto !important;
+  min-height: min(var(--bb-chart-body-min), calc(var(--bb-invest-workspace-max) - 11.5rem)) !important;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, var(--bb-rail-w, 460px)) !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-watch {
+    flex: 0 0 var(--bb-watch-rail-flex, 42%) !important;
+    min-height: 9rem !important;
+    max-height: none !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-rail > .bb-watch {
+    min-height: 6rem !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-watch .bb-panel-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll #bbWatchlist {
+    flex: 1 1 auto !important;
+    min-height: 12rem !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-rail > .bb-info-panel {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-panel-head--watch h2 {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}

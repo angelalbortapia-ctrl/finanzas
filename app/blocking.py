@@ -22,3 +22,9 @@ async def run_blocking(func: Callable[..., T], *args, **kwargs) -> T:
 async def run_local(func: Callable[..., T], *args, **kwargs) -> T:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_LOCAL_EXECUTOR, partial(func, *args, **kwargs))
+
+
+def shutdown_executors() -> None:
+    """Liberar hilos al apagar uvicorn (evita warnings en reinicios)."""
+    _EXECUTOR.shutdown(wait=False, cancel_futures=True)
+    _LOCAL_EXECUTOR.shutdown(wait=False, cancel_futures=True)

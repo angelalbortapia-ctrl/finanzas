@@ -6,6 +6,7 @@ import logging
 import math
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -32,7 +33,9 @@ PERIOD_MAP = {
     "max": ("max", "1mo"),
 }
 
-_news_cache: dict[str, Any] = {"at": 0.0, "items": [], "version": 2}
+_news_cache: dict[str, Any] = {"at": 0.0, "items": [], "version": 5}
+_symbol_news_cache: dict[str, tuple[float, list[dict]]] = {}
+SYMBOL_NEWS_TTL_SEC = 600
 _quote_cache: dict[str, Any] = {"at": 0.0, "data": {}}
 _chart_cache: dict[str, Any] = {"data": {}}
 _cache_lock = threading.Lock()
@@ -40,6 +43,9 @@ NEWS_TTL_SEC = 900
 QUOTE_CACHE_SEC = 120
 CHART_CACHE_SEC = 900
 FINANCIALS_CACHE_SEC = 86400
+WIDGETS_CACHE_SEC = 90
+WIDGETS_CACHE_VER = "tv2"
+_widgets_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 FINANCIALS_EMPTY_CACHE_SEC = 300
 FIN_SECTIONS = frozenset({
     "all", "resumen", "beneficios", "ingresos", "balance", "flujo", "dividendos", "stats",
@@ -115,10 +121,47 @@ PRIORITY_STATEMENT_ROWS = (
 
 SPANISH_NEWS_FEEDS: list[tuple[str, str]] = [
     ("BMV", "https://news.google.com/rss/search?q=bolsa+mexicana+BMV+IPC&hl=es-MX&gl=MX&ceid=MX:es-419"),
-    ("Mercados", "https://news.google.com/rss/search?q=mercados+financieros+mexico&hl=es-MX&gl=MX&ceid=MX:es-419"),
-    ("Banxico", "https://news.google.com/rss/search?q=Banxico+tasa+decision&hl=es-MX&gl=MX&ceid=MX:es-419"),
-    ("SIC", "https://news.google.com/rss/search?q=SIC+BMV+acciones&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("SIC", "https://news.google.com/rss/search?q=SIC+BMV+emisoras+acciones&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("Mercados", "https://news.google.com/rss/search?q=mercados+financieros+mexico+bolsa&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("Banxico", "https://news.google.com/rss/search?q=Banxico+tasa+politica+monetaria&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("Politica", "https://news.google.com/rss/search?q=politica+economica+mexico+Hacienda+SHCP&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("Macro", "https://news.google.com/rss/search?q=inflacion+PIB+economia+mexico&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("FX", "https://news.google.com/rss/search?q=tipo+cambio+peso+dolar+mexico&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("Fed", "https://news.google.com/rss/search?q=Wall+Street+Fed+mercados+global&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("Commod", "https://news.google.com/rss/search?q=petroleo+oro+commodities+mercados&hl=es-MX&gl=MX&ceid=MX:es-419"),
+    ("Empresas", "https://news.google.com/rss/search?q=empresas+mexicanas+resultados+financieros&hl=es-MX&gl=MX&ceid=MX:es-419"),
 ]
+
+# RSS directo (español) — tag en ticker, publisher visible en meta
+DIRECT_NEWS_FEEDS: list[tuple[str, str, str]] = [
+    (
+        "Economista",
+        "https://www.eleconomista.com.mx/rss/ultimas-noticias",
+        "El Economista",
+    ),
+    (
+        "Financiero",
+        "https://www.elfinanciero.com.mx/arc/outboundfeeds/rss/?outputType=xml",
+        "El Financiero",
+    ),
+    (
+        "Bloomberg",
+        "https://www.bloomberglinea.com/arc/outboundfeeds/rss/?outputType=xml",
+        "Bloomberg Línea",
+    ),
+    (
+        "Expansion",
+        "https://expansion.mx/rss",
+        "Expansión",
+    ),
+    (
+        "AltoNivel",
+        "https://www.altonivel.com.mx/feed/",
+        "Alto Nivel",
+    ),
+]
+
+DIRECT_NEWS_PER_FEED = 6
 
 BANXICO_MEETING_MONTHS = (2, 3, 5, 6, 8, 9, 11, 12)
 EARNINGS_MONTHS = (1, 4, 7, 10)
@@ -526,13 +569,8 @@ def _fetch_chart_dividends(yahoo: str, period: str, points: list[dict]) -> tuple
             next_div = {
                 "ex_date": ex_dt.strftime("%Y-%m-%d"),
                 "amount": rate,
-                "yield_pct": _safe_float(info.get("dividendYield") or info.get("trailingAnnualDividendYield")),
+                "yield_pct": _dividend_yield_pct(info),
             }
-            if rate:
-                next_div["yield_pct"] = next_div.get("yield_pct") or (
-                    (rate / _safe_float(info.get("regularMarketPrice") or info.get("currentPrice")) * 100)
-                    if _safe_float(info.get("regularMarketPrice") or info.get("currentPrice")) else None
-                )
         except (TypeError, ValueError, OSError):
             next_div = None
 
@@ -688,6 +726,21 @@ def get_chart_data(symbol: str, period: str = "6mo", compare: str = "") -> dict:
     with _cache_lock:
         _cache_put(_chart_cache, cache_key, dict(result), max_items=_CACHE_MAX_CHART)
     return result
+
+
+def _dividend_yield_pct(info: dict) -> float | None:
+    """Rendimiento en %. yfinance >= 0.2.55 entrega dividendYield ya en %, trailing* en fracción."""
+    direct = _safe_float(info.get("dividendYield"))
+    if direct is not None:
+        return round(direct, 2)
+    trailing = _safe_float(info.get("trailingAnnualDividendYield"))
+    if trailing is not None:
+        return round(trailing * 100, 2)
+    rate = _safe_float(info.get("dividendRate") or info.get("trailingAnnualDividendRate"))
+    price = _safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
+    if rate and price:
+        return round(rate / price * 100, 2)
+    return None
 
 
 def _info_pct(value: Any) -> float | None:
@@ -880,7 +933,7 @@ def _dividend_history(ticker: Any, info: dict) -> dict[str, Any]:
                 })
     except Exception:
         rows = []
-    div_yield = _info_pct(info.get("dividendYield") or info.get("trailingAnnualDividendYield"))
+    div_yield = _dividend_yield_pct(info)
     div_rate = _safe_float(info.get("dividendRate") or info.get("trailingAnnualDividendRate"))
     ex_div = None
     if info.get("exDividendDate"):
@@ -992,9 +1045,7 @@ def _df_latest_value(df: Any, keys: tuple[str, ...]) -> float | None:
 
 
 def _dividends_from_info(info: dict) -> dict[str, Any]:
-    div_yield = _safe_float(info.get("dividendYield") or info.get("trailingAnnualDividendYield"))
-    if div_yield is not None and abs(div_yield) < 1:
-        div_yield *= 100
+    div_yield = _dividend_yield_pct(info)
     div_rate = _safe_float(info.get("dividendRate") or info.get("trailingAnnualDividendRate"))
     ex_date = None
     if info.get("exDividendDate"):
@@ -1054,7 +1105,14 @@ def _slice_financials(payload: dict[str, Any], section: str) -> dict[str, Any]:
     out: dict[str, Any] = {k: payload[k] for k in base_keys if k in payload}
     out["section"] = section
     if section == "resumen":
-        for key in ("fundamentals", "income_trends", "earnings", "dividends", "statistics"):
+        for key in (
+            "fundamentals",
+            "income_trends",
+            "earnings",
+            "dividends",
+            "statistics",
+            "analysts",
+        ):
             if key in payload:
                 out[key] = payload[key]
     elif section == "beneficios":
@@ -1095,6 +1153,21 @@ def _cache_financials_payload(cache_key: str, payload: dict[str, Any]) -> None:
         )
 
 
+def _analysts_snapshot(ticker: Any, info: dict[str, Any], price: float | None) -> dict[str, Any] | None:
+    try:
+        from app.emisora_analysis import _analysts_from_info, _recommendation_counts
+    except ImportError:
+        return None
+    analysts = _analysts_from_info(info)
+    if not analysts:
+        return None
+    out = dict(analysts)
+    out["counts"] = _recommendation_counts(ticker)
+    if out.get("target_mean") and price and price > 0:
+        out["upside_pct"] = round((out["target_mean"] - price) / price * 100, 2)
+    return out
+
+
 def _fetch_financials_resumen(
     meta: dict[str, Any],
     ticker: Any,
@@ -1104,6 +1177,7 @@ def _fetch_financials_resumen(
     q_income_stmt = _df_to_statement(ticker.quarterly_financials)
     fundamentals = _quote_fundamentals(meta, info, balance_df=ticker.balance_sheet)
     earnings = _enrich_earnings(_earnings_history(ticker, info), q_income_stmt)
+    price = _safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
     return {
         "symbol": meta["symbol"],
         "name": meta["name"],
@@ -1113,10 +1187,124 @@ def _fetch_financials_resumen(
         "fundamentals": fundamentals,
         "income_trends": _income_trends(ticker.financials, ticker.quarterly_financials),
         "earnings": earnings,
-        "dividends": _dividends_from_info(info),
+        "dividends": _dividend_history(ticker, info),
         "statistics": _extended_statistics(info, fundamentals),
+        "analysts": _analysts_snapshot(ticker, info, price),
         "fetched_at": _now(),
         "sections_loaded": ["resumen", "beneficios", "stats"],
+    }
+
+
+def _yahoo_profile_bundle(meta: dict[str, Any], fin: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    try:
+        from app.emisora_analysis import compute_health
+        import yfinance as yf
+
+        info = yf.Ticker(meta["yahoo"]).info or {}
+    except Exception as exc:
+        logger.debug("widgets yahoo profile: %s", exc)
+        return None, None
+    health = compute_health(info)
+    summary = (info.get("longBusinessSummary") or "").strip()
+    fund = fin.get("fundamentals") or {}
+    profile = {
+        "summary": (summary[:520] + "…") if len(summary) > 520 else summary,
+        "website": info.get("website"),
+        "employees": info.get("fullTimeEmployees"),
+        "sector": fund.get("sector") or info.get("sector"),
+        "industry": fund.get("industry") or info.get("industry"),
+        "city": info.get("city"),
+        "country": info.get("country"),
+    }
+    if not any(profile.values()):
+        profile = None
+    return health, profile
+
+
+def get_terminal_widgets(symbol: str) -> dict[str, Any]:
+    """Panel inferior: Yahoo + Google Noticias + TradingView scanner/embeds."""
+    sym_key = f"{WIDGETS_CACHE_VER}:{(symbol or '').strip().upper().replace('BMV:', '') or DEFAULT_CHART_SYMBOL}"
+    now = time.time()
+    with _cache_lock:
+        hit = _widgets_cache.get(sym_key)
+        if hit and now - hit[0] < WIDGETS_CACHE_SEC:
+            out = dict(hit[1])
+            out["_cached"] = True
+            return out
+    payload = _compose_terminal_widgets(symbol)
+    if payload.get("applicable") and not payload.get("error"):
+        store = dict(payload)
+        with _cache_lock:
+            _widgets_cache[sym_key] = (now, store)
+    return payload
+
+
+def _compose_terminal_widgets(symbol: str) -> dict[str, Any]:
+    fin = get_financials_detail(symbol, "resumen")
+    if fin.get("error"):
+        return fin
+    if not fin.get("applicable", True):
+        return {
+            "symbol": fin.get("symbol", symbol),
+            "applicable": False,
+            "message": fin.get("message") or "No aplica a este instrumento",
+        }
+
+    sym = fin["symbol"]
+    meta = get_symbol_meta(sym)
+    google_news: list[dict] = []
+    tv: dict[str, Any] = {"applicable": False}
+    health = None
+    profile = None
+    warnings: list[str] = []
+    sources: list[str] = ["Yahoo Finance"]
+    if meta:
+        try:
+            google_news = _news_for_symbol(sym, limit=12)
+            if google_news:
+                sources.append("Google Noticias")
+            else:
+                warnings.append("Sin noticias de Google para esta emisora")
+        except Exception as exc:
+            logger.debug("widgets google news: %s", exc)
+            warnings.append("Noticias de Google no disponibles")
+        try:
+            from app.tv_intel import fetch_tradingview_scan
+
+            tv = fetch_tradingview_scan(sym)
+            if tv.get("applicable"):
+                sources.append("TradingView")
+            elif tv.get("error"):
+                warnings.append("TradingView: datos limitados")
+        except Exception as exc:
+            logger.debug("widgets tv scan: %s", exc)
+            tv = {"applicable": False, "error": str(exc)}
+            warnings.append("TradingView no respondió")
+        if meta.get("yahoo"):
+            health, profile = _yahoo_profile_bundle(meta, fin)
+
+    margins = (fin.get("income_trends") or {}).get("quarterly", {}).get("margin_pct") or []
+
+    return {
+        "symbol": sym,
+        "name": fin.get("name"),
+        "yahoo": fin.get("yahoo"),
+        "currency": fin.get("currency", "MXN"),
+        "applicable": True,
+        "sources": sources,
+        "warnings": warnings,
+        "statistics": fin.get("statistics") or [],
+        "earnings": fin.get("earnings"),
+        "dividends": fin.get("dividends"),
+        "income_trends": fin.get("income_trends"),
+        "margins_quarterly": margins[-6:],
+        "fundamentals": fin.get("fundamentals"),
+        "analysts": fin.get("analysts"),
+        "google_news": google_news,
+        "health": health,
+        "profile": profile,
+        "tradingview": tv,
+        "fetched_at": fin.get("fetched_at"),
     }
 
 
@@ -1320,7 +1508,7 @@ def get_quote_detail(symbol: str) -> dict:
     chg = (price - prev) if prev else 0
     chg_pct = (chg / prev * 100) if prev else 0
 
-    div_yield = _safe_float(info.get("dividendYield") or info.get("trailingAnnualDividendYield"))
+    div_yield = _dividend_yield_pct(info)
     div_rate = _safe_float(info.get("dividendRate") or info.get("trailingAnnualDividendRate"))
     ex_div = None
     if info.get("exDividendDate"):
@@ -1332,9 +1520,12 @@ def get_quote_detail(symbol: str) -> dict:
     fundamentals = _quote_fundamentals(meta, info)
     kind = meta.get("kind", "stock")
 
+    name = meta["name"]
+    if name == meta["symbol"]:
+        name = info.get("longName") or info.get("shortName") or name
     return {
         "symbol": meta["symbol"],
-        "name": meta["name"],
+        "name": name,
         "yahoo": yahoo,
         "board": meta.get("board", "bmv"),
         "board_title": meta.get("board_title"),
@@ -1351,9 +1542,7 @@ def get_quote_detail(symbol: str) -> dict:
         "week52_high": _safe_float(info.get("fiftyTwoWeekHigh")),
         "week52_low": _safe_float(info.get("fiftyTwoWeekLow")),
         "market_cap": fundamentals.get("market_cap"),
-        "dividend_yield": div_yield if div_yield is not None else (
-            (div_rate / price * 100) if div_rate and price else None
-        ),
+        "dividend_yield": div_yield,
         "dividend_rate": div_rate,
         "ex_dividend_date": ex_div,
         "change_abs": chg,
@@ -1377,6 +1566,47 @@ def _extract_closes(data, ysym: str, multi: bool):
         return closes, vols
     except (KeyError, TypeError, AttributeError):
         return None, None
+
+
+def _quick_live_quote(meta: dict) -> dict | None:
+    """Cotización rápida con variación del día (Yahoo info / histórico)."""
+    import yfinance as yf
+
+    yahoo = meta["yahoo"]
+    t = yf.Ticker(yahoo)
+    try:
+        info = t.info or {}
+    except Exception:
+        info = {}
+    price = _safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
+    prev = _safe_float(info.get("regularMarketPreviousClose") or info.get("previousClose"))
+    pct = _safe_float(info.get("regularMarketChangePercent"))
+    try:
+        hist = t.history(period="5d", interval="1d", auto_adjust=True)
+        if hist is not None and not hist.empty:
+            price = price or _safe_float(hist["Close"].iloc[-1])
+            if len(hist) >= 2:
+                prev = prev or _safe_float(hist["Close"].iloc[-2])
+    except Exception:
+        pass
+    if price is None:
+        return None
+    if pct is None:
+        chg = (price - prev) if prev else 0
+        pct = (chg / prev * 100) if prev else 0
+    else:
+        chg = (price - prev) if prev else (price * pct / 100)
+    return {
+        "symbol": meta["symbol"],
+        "name": meta["name"],
+        "price": price,
+        "prev_close": prev,
+        "change_abs": chg,
+        "change_pct": pct,
+        "volume": _safe_float(info.get("volume") or info.get("regularMarketVolume")),
+        "fetched_at": _now(),
+        "kind": meta.get("kind", "stock"),
+    }
 
 
 def _finnhub_live(yahoo_symbol: str) -> dict | None:
@@ -1407,7 +1637,7 @@ def _finnhub_live(yahoo_symbol: str) -> dict | None:
 def get_live_quotes(symbols: list[str]) -> dict[str, dict]:
     now = time.time()
     resolved: dict[str, dict] = {}
-    for sym in symbols[:25]:
+    for sym in symbols[:40]:
         meta = get_symbol_meta(sym)
         if meta:
             resolved[meta["symbol"]] = meta
@@ -1464,6 +1694,7 @@ def get_live_quotes(symbols: list[str]) -> dict[str, dict]:
                 "change_pct": (chg / prev * 100) if prev else 0,
                 "volume": vol,
                 "fetched_at": _now(),
+                "kind": meta.get("kind", "stock"),
             }
         except Exception:
             continue
@@ -1487,7 +1718,15 @@ def get_live_quotes(symbols: list[str]) -> dict[str, dict]:
             "volume": None,
             "fetched_at": _now(),
             "source": "finnhub",
+            "kind": resolved[bmv_sym].get("kind", "stock"),
         }
+
+    for sym, meta in resolved.items():
+        if sym in out:
+            continue
+        row = _quick_live_quote(meta)
+        if row:
+            out[sym] = row
 
     with _cache_lock:
         _quote_cache["at"] = now
@@ -1696,7 +1935,13 @@ def _parse_rss_date(raw: str | None) -> str:
         return raw.replace("Z", "")[:19]
 
 
-def _fetch_google_rss(url: str, tag: str, limit: int = 8) -> list[dict]:
+def _fetch_rss(
+    url: str,
+    tag: str,
+    limit: int = 8,
+    default_publisher: str = "Google Noticias",
+    source: str = "google-es",
+) -> list[dict]:
     import re
     import urllib.request
     import xml.etree.ElementTree as ET
@@ -1704,32 +1949,41 @@ def _fetch_google_rss(url: str, tag: str, limit: int = 8) -> list[dict]:
     articles = []
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; FinanzasTerminal/2.0)"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             root = ET.fromstring(resp.read())
         for item in root.findall(".//item")[:limit]:
             title_el = item.find("title")
             link_el = item.find("link")
             pub_el = item.find("pubDate")
-            if title_el is None or not title_el.text:
+            title = (title_el.text or "").strip() if title_el is not None else ""
+            if not title:
                 continue
             desc_el = item.find("description")
             summary = ""
             if desc_el is not None and desc_el.text:
                 summary = re.sub(r"<[^>]+>", "", desc_el.text)[:200]
             source_el = item.find("source")
-            publisher = source_el.text if source_el is not None and source_el.text else "Google Noticias"
+            publisher = (
+                source_el.text.strip()
+                if source_el is not None and source_el.text
+                else default_publisher
+            )
             articles.append({
-                "title": title_el.text.strip(),
+                "title": title,
                 "summary": summary,
                 "url": (link_el.text or "").strip() if link_el is not None else "",
                 "publisher": publisher,
                 "published_at": _parse_rss_date(pub_el.text if pub_el is not None else None),
                 "symbol": tag,
-                "source": "google-es",
+                "source": source,
             })
     except Exception:
         pass
     return articles
+
+
+def _fetch_google_rss(url: str, tag: str, limit: int = 8) -> list[dict]:
+    return _fetch_rss(url, tag, limit)
 
 
 INDEX_NEWS_QUERIES: dict[str, str] = {
@@ -1756,21 +2010,74 @@ INDEX_NEWS_QUERIES: dict[str, str] = {
 }
 
 
+def _news_for_symbol(sym: str, limit: int = 6) -> list[dict]:
+    sym = sym.strip().upper().replace("BMV:", "")
+    if not sym:
+        return []
+    now = time.time()
+    with _cache_lock:
+        cached = _symbol_news_cache.get(sym)
+        if cached and now - cached[0] < SYMBOL_NEWS_TTL_SEC:
+            return list(cached[1][:limit])
+
+    meta = get_symbol_meta(sym)
+    if sym in INDEX_NEWS_QUERIES:
+        q = INDEX_NEWS_QUERIES[sym]
+    else:
+        name = meta["name"] if meta else sym
+        kind = (meta or {}).get("kind", "stock")
+        if kind in ("index", "fx"):
+            q = f"{sym}+{name.split()[0]}+mercados+financieros"
+        else:
+            q = f"{meta['symbol']}+{name.split()[0]}+BMV+acciones" if meta else f"{sym}+BMV+acciones"
+    url = f"https://news.google.com/rss/search?q={q}&hl=es-MX&gl=MX&ceid=MX:es-419"
+    tag = meta["symbol"] if meta else sym
+    items = _fetch_google_rss(url, tag, limit)
+    with _cache_lock:
+        _symbol_news_cache[sym] = (now, items)
+    return items[:limit]
+
+
+def get_blended_ticker_news(limit: int = 40, symbols: list[str] | None = None) -> list[dict]:
+    """Feed del ticker inferior: noticias generales de mercado + emisoras (watchlist/posiciones)."""
+    market_n = max(22, min(limit - 10, 30))
+    merged: list[dict] = []
+    seen: set[str] = set()
+    for article in get_market_news(market_n, symbol=""):
+        key = article["title"].lower()[:100]
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(article)
+
+    stock_syms: list[str] = []
+    for raw in symbols or []:
+        sym = raw.strip().upper().replace("BMV:", "")
+        if not sym or sym in stock_syms:
+            continue
+        meta = get_symbol_meta(sym)
+        kind = (meta or {}).get("kind", "stock")
+        if kind == "stock":
+            stock_syms.append(sym)
+        if len(stock_syms) >= 10:
+            break
+
+    per_sym = max(2, min(4, (limit - len(merged)) // max(1, len(stock_syms)) if stock_syms else 0))
+    for sym in stock_syms:
+        for article in _news_for_symbol(sym, per_sym or 3):
+            key = article["title"].lower()[:100]
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(article)
+
+    merged.sort(key=lambda x: x.get("published_at") or "", reverse=True)
+    return merged[:limit]
+
+
 def get_market_news(limit: int = 30, symbol: str = "") -> list[dict]:
     if symbol:
-        sym = symbol.strip().upper().replace("BMV:", "")
-        meta = get_symbol_meta(sym)
-        if sym in INDEX_NEWS_QUERIES:
-            q = INDEX_NEWS_QUERIES[sym]
-        else:
-            name = meta["name"] if meta else sym
-            kind = (meta or {}).get("kind", "stock")
-            if kind in ("index", "fx"):
-                q = f"{sym}+{name.split()[0]}+mercados+financieros"
-            else:
-                q = f"{meta['symbol']}+{name.split()[0]}+BMV" if meta else sym
-        url = f"https://news.google.com/rss/search?q={q}&hl=es-MX&gl=MX&ceid=MX:es-419"
-        items = _fetch_google_rss(url, meta["symbol"] if meta else sym, limit)
+        items = _news_for_symbol(symbol, limit)
         if items:
             return items
 
@@ -1778,7 +2085,7 @@ def get_market_news(limit: int = 30, symbol: str = "") -> list[dict]:
     with _cache_lock:
         cache_ok = (
             _news_cache["items"]
-            and _news_cache.get("version") == 2
+            and _news_cache.get("version") == 5
             and now - _news_cache["at"] < NEWS_TTL_SEC
         )
         if cache_ok:
@@ -1787,11 +2094,36 @@ def get_market_news(limit: int = 30, symbol: str = "") -> list[dict]:
     articles: list[dict] = []
     seen: set[str] = set()
     for tag, feed_url in SPANISH_NEWS_FEEDS:
-        for a in _fetch_google_rss(feed_url, tag, 6):
+        for a in _fetch_google_rss(feed_url, tag, 5):
             key = a["title"].lower()[:100]
             if key not in seen:
                 seen.add(key)
                 articles.append(a)
+
+    if DIRECT_NEWS_FEEDS:
+        workers = min(6, len(DIRECT_NEWS_FEEDS))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(
+                    _fetch_rss,
+                    feed_url,
+                    tag,
+                    DIRECT_NEWS_PER_FEED,
+                    publisher,
+                    "rss-direct",
+                )
+                for tag, feed_url, publisher in DIRECT_NEWS_FEEDS
+            ]
+            for fut in as_completed(futures):
+                try:
+                    batch = fut.result()
+                except Exception:
+                    batch = []
+                for a in batch:
+                    key = a["title"].lower()[:100]
+                    if key not in seen:
+                        seen.add(key)
+                        articles.append(a)
 
     articles.sort(key=lambda x: x.get("published_at") or "", reverse=True)
     with _cache_lock:

@@ -1211,10 +1211,78 @@ html[data-theme="light"] .pat-stat { background: #f8fafc; }
   margin-top: var(--bb-chrome-h);
   margin-bottom: var(--bb-status-h);
 }
-.forge-mode.page-investments .shell { margin: 0; padding: 0; }
+.forge-mode.page-investments {
+  --bb-chrome-h: 44px;
+  --bb-terminal-offset-y: 0px;
+  --bb-news-bar-h: 48px;
+  --bb-price-bar-h: 42px;
+  --bb-ticker-fixed-h: 42px;
+  --bb-invest-header-gap: 6px;
+  --bb-ws-tabs-h: 3rem;
+  --bb-invest-scroll-pad-x: 1.15rem;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+  padding-bottom: 0;
+}
+.forge-mode.page-investments .shell {
+  margin: 0;
+  padding: 0 var(--bb-invest-scroll-pad-x) 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: calc(
+    100dvh - var(--bb-chrome-h) - var(--bb-ticker-fixed-h, 42px) - var(--bb-invest-header-gap, 0px)
+      - var(--bb-ws-tabs-h, 3.15rem) - var(--bb-news-bar-h, 48px)
+  );
+  max-height: calc(
+    100dvh - var(--bb-chrome-h) - var(--bb-ticker-fixed-h, 42px) - var(--bb-invest-header-gap, 0px)
+      - var(--bb-ws-tabs-h, 3.15rem) - var(--bb-news-bar-h, 48px)
+  );
+  min-height: 0;
+  margin-top: calc(
+    var(--bb-chrome-h) + var(--bb-ticker-fixed-h, 42px) + var(--bb-invest-header-gap, 0px)
+      + var(--bb-ws-tabs-h, 3.15rem)
+  );
+  padding-top: var(--bb-terminal-offset-y, 0px);
+  padding-bottom: 0;
+  overflow: hidden;
+}
+.forge-mode.page-investments .page-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.forge-mode.page-investments .bb-statusbar { display: none; }
 .forge-mode.page-investments .bb-shell {
-  height: calc(100vh - var(--bb-chrome-h) - var(--bb-status-h));
-  margin-top: var(--bb-chrome-h);
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none;
+  margin-top: 0 !important;
+  padding-bottom: 0;
+  overflow: hidden !important;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.forge-mode.page-investments .bb-shell--scroll {
+  flex: 1 1 0% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  /* Alto del bloque gráfica+rail (deja ~11rem abajo para indicadores) */
+  --bb-invest-top-h: min(
+    48vh,
+    calc(
+      100dvh - var(--bb-chrome-h, 44px) - var(--bb-price-bar-h, 42px) - var(--bb-news-bar-h, 48px)
+        - var(--bb-ticker-h, 42px) - var(--bb-ws-tabs-h, 3.1rem) - 18rem
+    )
+  );
 }
 
 /* ── Unified chrome ── */
@@ -1347,6 +1415,7 @@ html[data-theme="light"] .pat-stat { background: #f8fafc; }
 }
 .bb-chrome-icon:hover,
 .bb-chrome-icon.active { color: var(--bb-amber); }
+.bb-chrome-alerts:not([hidden]) { margin-right: 0.15rem; }
 .bb-chrome-clock {
   font-size: .62rem;
   text-align: right;

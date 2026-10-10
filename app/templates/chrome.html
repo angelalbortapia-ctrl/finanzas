@@ -12,10 +12,11 @@
     <a href="/simulador" class="bb-chrome-tab {% if page == 'simulator' %}active{% endif %}">Simulador</a>
     <a href="/movimientos" class="bb-chrome-tab {% if page == 'transactions' %}active{% endif %}">Mov.</a>
   </nav>
-  <div class="bb-chrome-layout" id="bbChromeLayout" hidden>
+  <div class="bb-chrome-layout" id="bbChromeLayout"{% if page != 'investments' %} hidden{% endif %}>
     <button type="button" class="bb-layout-btn" id="bbForgeLayoutBtn" title="Arrastra los bordes para cambiar tamaños">⊞ Ajustar</button>
     <button type="button" class="bb-layout-reset" id="bbForgeLayoutReset" hidden title="Restaurar tamaños">Reset</button>
   </div>
+  <a href="/inversiones#alertas" class="bb-chrome-alerts" id="bbChromeAlerts" title="Alertas de precio activas" hidden aria-label="Alertas"></a>
   <button type="button" class="bb-chrome-search" id="bbPaletteBtn" title="Buscar — tecla /">
     <kbd>/</kbd>
   </button>

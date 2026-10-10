@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ symbol }} — Análisis — Finanzas{% endblock %}
-{% block page_title %}Análisis de emisora{% endblock %}
+{% block page_title %}{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="/static/terminal.css?v={{ static_v.terminal_css }}">
 <script src="/static/lightweight-charts.js?v={{ static_v.lightweight_charts_js }}"></script>
@@ -8,74 +8,139 @@
 {% block content %}
 
 <div class="bb-emisora-page" id="bbEmisoraPage" data-symbol="{{ symbol }}">
-  <header class="bb-emisora-top">
-    <div class="bb-emisora-top-left">
+  <header class="bb-emo-header">
+    <div class="bb-emo-header-row">
       <a href="/inversiones?symbol={{ symbol | urlencode }}" class="bb-emisora-back">← Terminal</a>
       <div class="bb-emisora-search-wrap">
         <input type="text" class="bb-emisora-search" id="bbEmisoraSearch" placeholder="Buscar emisora…" autocomplete="off">
         <div class="bb-emisora-search-results" id="bbEmisoraSearchResults"></div>
       </div>
+      <a href="/inversiones?symbol={{ symbol | urlencode }}" class="bb-emo-btn-terminal">Gráfica pro</a>
     </div>
-    <div class="bb-emisora-hero" id="bbEmisoraHero">
+
+    <div class="bb-emo-hero" id="bbEmisoraHero">
       <span class="bb-watch-logo-wrap bb-emisora-logo-wrap">
         <img class="bb-watch-logo" id="bbEmisoraLogo" src="/api/terminal/logo/{{ symbol }}" alt=""
           onerror="this.style.display='none';this.parentElement.classList.add('bb-watch-logo-wrap--fb');">
         <span class="bb-watch-logo-fb" aria-hidden="true">{{ symbol[:2] }}</span>
       </span>
-      <div class="bb-emisora-hero-text">
-        <div class="bb-emisora-symbol" id="bbEmisoraSymbol">{{ symbol }}</div>
-        <div class="bb-emisora-name" id="bbEmisoraName">{{ meta.name if meta else '—' }}</div>
-        <div class="bb-emisora-meta" id="bbEmisoraMeta">{{ meta.board_title if meta else '' }}</div>
+      <div class="bb-emo-hero-main">
+        <div class="bb-emo-hero-title">
+          <h1 class="bb-emisora-name" id="bbEmisoraName">{{ meta.name if meta else '—' }}</h1>
+          <div class="bb-emo-hero-sub">
+            <span class="bb-emisora-symbol" id="bbEmisoraSymbol">{{ symbol }}</span>
+            <span class="bb-emo-badge" id="bbEmoBadge"></span>
+          </div>
+          <div class="bb-emisora-meta" id="bbEmisoraMeta">{{ meta.board_title if meta else '' }}</div>
+        </div>
+        <div class="bb-emo-hero-price">
+          <div class="bb-emisora-price" id="bbEmisoraPrice">—</div>
+          <div class="bb-emisora-chg" id="bbEmisoraChg"></div>
+          <div class="bb-emo-market-time" id="bbEmoMarketTime"></div>
+        </div>
       </div>
-      <div class="bb-emisora-price-block">
-        <div class="bb-emisora-price" id="bbEmisoraPrice">—</div>
-        <div class="bb-emisora-chg" id="bbEmisoraChg"></div>
-      </div>
-      <a href="/inversiones?symbol={{ symbol | urlencode }}" class="bb-emisora-chart-link">Ver en terminal</a>
     </div>
+
+    <div class="bb-emo-range" id="bbEmoRange52" hidden>
+      <span id="bbEmoRangeLo">—</span>
+      <div class="bb-emo-range-track"><i id="bbEmoRangeMark"></i></div>
+      <span id="bbEmoRangeHi">—</span>
+      <span class="bb-emo-range-label">Rango 52 semanas</span>
+    </div>
+
+    <div class="bb-emo-quote-strip" id="bbEmoQuoteStrip" hidden>
+      <div><span>Apertura</span><strong id="emoQOpen">—</strong></div>
+      <div><span>Máximo</span><strong id="emoQHigh">—</strong></div>
+      <div><span>Mínimo</span><strong id="emoQLow">—</strong></div>
+      <div><span>Volumen</span><strong id="emoQVol">—</strong></div>
+      <div><span>Bid / Ask</span><strong id="emoQBid">—</strong></div>
+    </div>
+
     <div class="bb-emisora-holding" id="bbEmisoraHolding" hidden></div>
   </header>
 
-  <div class="bb-emisora-grid">
-    <section class="bb-emisora-chart-panel bb-panel">
-      <div class="bb-pane-subhead bb-emisora-chart-head">
-        <span id="bbEmisoraChartLabel">Precio · 6M</span>
-        <div class="bb-emisora-periods" role="group" aria-label="Periodo de gráfica">
-          <button type="button" class="bb-emisora-period-btn" data-chart-period="1mo">1M</button>
-          <button type="button" class="bb-emisora-period-btn active" data-chart-period="6mo">6M</button>
-          <button type="button" class="bb-emisora-period-btn" data-chart-period="1y">1A</button>
-          <button type="button" class="bb-emisora-period-btn" data-chart-period="5y">5A</button>
+  <nav class="bb-emo-main-nav" id="bbEmoMainNav" role="tablist" aria-label="Vista de análisis">
+    <button type="button" class="active" data-emo-view="resumen" role="tab" aria-selected="true">Resumen</button>
+    <button type="button" data-emo-view="financiero" role="tab" aria-selected="false">Información financiera</button>
+    <button type="button" data-emo-view="previsiones" role="tab" aria-selected="false">Previsiones</button>
+    <button type="button" data-emo-view="tecnico" role="tab" aria-selected="false">Datos técnicos</button>
+    <button type="button" data-emo-view="noticias" role="tab" aria-selected="false">Noticias</button>
+  </nav>
+
+  <section class="bb-emo-view active" id="bbEmoViewResumen" data-emo-view="resumen">
+    <div class="bb-emo-overview bb-panel" id="bbEmoOverview" hidden>
+      <div class="bb-pane-subhead"><span>Factores clave</span></div>
+      <div class="bb-emo-facts" id="bbEmoFacts"></div>
+    </div>
+
+    <div class="bb-emo-resumen-grid">
+      <section class="bb-emisora-chart-panel bb-panel">
+        <div class="bb-pane-subhead bb-emisora-chart-head">
+          <span id="bbEmisoraChartLabel">Precio · 6M</span>
+          <div class="bb-emo-chart-tools">
+            <div class="bb-emisora-periods" role="group" aria-label="Periodo de gráfica">
+              <button type="button" class="bb-emisora-period-btn" data-chart-period="1mo">1M</button>
+              <button type="button" class="bb-emisora-period-btn active" data-chart-period="6mo">6M</button>
+              <button type="button" class="bb-emisora-period-btn" data-chart-period="1y">1A</button>
+              <button type="button" class="bb-emisora-period-btn" data-chart-period="5y">5A</button>
+            </div>
+            <button type="button" class="bb-emo-compare-btn" id="bbEmoCompareIpc" title="Rendimiento % vs IPC en el periodo">vs IPC</button>
+          </div>
         </div>
-      </div>
-      <div class="bb-emisora-chart-wrap">
-        <div id="bbEmisoraChartStatus" class="bb-chart-status"></div>
-        <div id="bbEmisoraChart"></div>
-      </div>
-    </section>
+        <div class="bb-emisora-chart-wrap">
+          <div id="bbEmisoraChartStatus" class="bb-chart-status"></div>
+          <div id="bbEmisoraChart"></div>
+        </div>
+      </section>
 
-    <aside class="bb-emisora-news-panel bb-panel">
-      <div class="bb-pane-subhead">
-        <span>Noticias</span>
-        <span class="bb-head-meta" id="bbEmisoraNewsTag">{{ symbol }}</span>
-      </div>
-      <div class="bb-panel-body" id="bbEmisoraNews"></div>
-    </aside>
+      <aside class="bb-emo-aside bb-panel">
+        <div class="bb-emo-split bb-emo-split--stack" id="bbEmoCardsResumen">
+          <div class="bb-emo-card" id="bbEmoAnalysts"></div>
+          <div class="bb-emo-card" id="bbEmoHealth"></div>
+        </div>
+        <div class="bb-pane-subhead"><span>Noticias</span><button type="button" class="bb-emo-link-btn" data-emo-goto="noticias">Ver todas</button></div>
+        <div class="bb-panel-body bb-emo-news-teaser" id="bbEmisoraNews"></div>
+      </aside>
+    </div>
 
-    <section class="bb-emisora-fin-panel bb-panel">
-      <div class="bb-pane-subhead"><span>Información financiera</span></div>
+    <div class="bb-emo-card bb-emo-card--wide bb-panel" id="bbEmoTechnical"></div>
+    <p class="bb-emo-profile" id="bbEmoProfile" hidden></p>
+    <div class="bb-emo-about" id="bbEmoAbout" hidden></div>
+  </section>
+
+  <section class="bb-emo-view" id="bbEmoViewFin" data-emo-view="financiero" hidden>
+    <div class="bb-emisora-fin-panel bb-panel bb-panel--flat">
       <div class="bb-fin-hub bb-fin-hub--page" id="bbFinHub">
         <nav class="bb-fin-nav" id="bbFinNav" role="tablist" aria-label="Información financiera"></nav>
         <div class="bb-fin-status" id="bbFinStatus">Cargando…</div>
         <div class="bb-fin-content" id="bbFinContent"></div>
       </div>
       <p class="bb-fin-na" id="bbFinNA" hidden>Los detalles financieros no aplican a índices o divisas.</p>
-    </section>
-  </div>
+    </div>
+  </section>
+
+  <section class="bb-emo-view" id="bbEmoViewPrevisiones" data-emo-view="previsiones" hidden>
+    <div class="bb-emo-forecasts bb-panel bb-panel--flat" id="bbEmoForecasts">
+      <p class="bb-fin-empty">Cargando previsiones…</p>
+    </div>
+  </section>
+
+  <section class="bb-emo-view" id="bbEmoViewTech" data-emo-view="tecnico" hidden>
+    <div class="bb-panel bb-panel--flat" id="bbEmoTechFull"></div>
+  </section>
+
+  <section class="bb-emo-view" id="bbEmoViewNews" data-emo-view="noticias" hidden>
+    <div class="bb-panel bb-panel--flat">
+      <div class="bb-pane-subhead"><span>Noticias</span><span class="bb-head-meta" id="bbEmisoraNewsTag">{{ symbol }}</span></div>
+      <div class="bb-panel-body bb-emo-news-full" id="bbEmisoraNewsFull"></div>
+    </div>
+  </section>
 </div>
 
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/chart.umd.min.js?v={{ static_v.chart_umd_js }}"></script>
 <script src="/static/terminal-financials.js?v={{ static_v.terminal_financials_js }}"></script>
 <script src="/static/emisora.js?v={{ static_v.emisora_js }}"></script>
 <script>
@@ -84,11 +149,11 @@ try {
   window.bootEmisoraPage({
     symbol: {{ symbol | tojson }},
     tab: {{ (request.query_params.get('tab') or 'resumen') | tojson }},
+    view: {{ (request.query_params.get('view') or 'resumen') | tojson }},
   });
 } catch (e) {
   const el = document.getElementById('bbFinStatus');
   if (el) el.textContent = 'Error al cargar scripts — recarga con Cmd+Shift+R';
 }
 </script>
-<script async src="/static/chart.umd.min.js?v={{ static_v.chart_umd_js }}"></script>
 {% endblock %}
