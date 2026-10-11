@@ -1,12 +1,12 @@
-const CACHE = 'finanzas-pro-v91';
+const CACHE = 'finanzas-pro-v92';
 /** Shell offline — terminal/emisora siempre red primero (ver fetch). */
 const PRECACHE = [
   '/',
   '/offline',
   '/static/app.css?v=28',
   '/static/app.js?v=33',
-  '/static/home.css?v=39',
-  '/static/sw.js?v=91',
+  '/static/home.css?v=40',
+  '/static/sw.js?v=92',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
 ];

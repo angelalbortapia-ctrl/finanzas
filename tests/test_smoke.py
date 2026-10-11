@@ -324,6 +324,21 @@ class SmokeTests(unittest.TestCase):
         bad = client.get("/emisora/ZZZZNOTREAL")
         self.assertEqual(bad.status_code, 404)
 
+    def test_inversiones_terminal_shell(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        client = TestClient(app)
+        res = client.get("/inversiones")
+        self.assertEqual(res.status_code, 200)
+        html = res.text
+        self.assertIn('id="bbTerminalApp"', html)
+        self.assertIn('id="bbToolRail"', html)
+        self.assertIn('id="bbWatchlist"', html)
+        self.assertIn('id="bbWidgetsGrid"', html)
+        self.assertIn("terminal-tool-rail.js", html)
+        self.assertIn("bb-watch-in-tool-rail", html)
+
     def test_emisora_overview_api_unknown(self):
         from fastapi.testclient import TestClient
         from app.main import app

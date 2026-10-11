@@ -1,41 +1,87 @@
 /* Deck de widgets bajo la gráfica — orden, ancho (1/2 col) y alto */
 
-const BB_WIDGETS_LAYOUT_KEY = 'bb_widgets_layout_v7';
+const BB_WIDGETS_LAYOUT_KEY = 'bb_widgets_layout_v10';
+const BB_WIDGETS_LAYOUT_LEGACY = ['bb_widgets_layout_v9', 'bb_widgets_layout_v8', 'bb_widgets_layout_v7'];
 
 const BB_WIDGETS_DEFAULT = {
   order: [
-    'stats', 'analysts',
-    'tv-scan', 'tv-technical',
-    'earnings', 'dividends',
+    'analysts',
+    'stats',
+    'tv-scan',
+    'earnings', 'dividends', 'tv-technical',
     'trends', 'health',
     'margins', 'profile',
     'tv-symbol',
     'google-news',
   ],
   widgets: {
-    stats: { col: 1, minH: 0 },
-    analysts: { col: 1, minH: 0 },
-    'tv-scan': { col: 1, minH: 0 },
-    'tv-technical': { col: 1, minH: 460 },
-    earnings: { col: 1, minH: 0 },
-    dividends: { col: 1, minH: 0 },
-    trends: { col: 2, minH: 0 },
-    health: { col: 1, minH: 0 },
-    margins: { col: 1, minH: 0 },
-    'google-news': { col: 2, minH: 0 },
-    profile: { col: 1, minH: 0 },
-    'tv-symbol': { col: 1, minH: 560 },
+    stats: { col: 2, minH: 300 },
+    analysts: { col: 2, minH: 320 },
+    'tv-scan': { col: 1, minH: 240 },
+    'tv-technical': { col: 1, minH: 400 },
+    earnings: { col: 1, minH: 280 },
+    dividends: { col: 1, minH: 320 },
+    trends: { col: 2, minH: 300 },
+    health: { col: 1, minH: 300 },
+    margins: { col: 1, minH: 220 },
+    profile: { col: 2, minH: 280 },
+    'tv-symbol': { col: 1, minH: 480 },
+    'google-news': { col: 2, minH: 340 },
   },
 };
 
+/** Dividendos + análisis técnico TV en la misma fila (mitad y mitad). */
+function bbWidgetsOrderPairDividendsTech(order) {
+  const ids = order.filter(Boolean);
+  const tech = 'tv-technical';
+  const div = 'dividends';
+  if (!ids.includes(div) || !ids.includes(tech)) return ids;
+  const withoutTech = ids.filter((id) => id !== tech);
+  const divIdx = withoutTech.indexOf(div);
+  withoutTech.splice(divIdx + 1, 0, tech);
+  return withoutTech;
+}
+
+function bbNormalizeWidgetsLayout(parsed) {
+  const base = JSON.parse(JSON.stringify(BB_WIDGETS_DEFAULT));
+  if (!parsed || typeof parsed !== 'object') return base;
+  let order = Array.isArray(parsed.order) ? [...parsed.order] : base.order;
+  BB_WIDGETS_DEFAULT.order.forEach((id) => {
+    if (!order.includes(id)) order.push(id);
+  });
+  const preferred = BB_WIDGETS_DEFAULT.order;
+  const merged = [];
+  preferred.forEach((id) => {
+    if (order.includes(id)) merged.push(id);
+  });
+  order.forEach((id) => {
+    if (!merged.includes(id)) merged.push(id);
+  });
+  base.order = bbWidgetsOrderPairDividendsTech(merged);
+  Object.keys(BB_WIDGETS_DEFAULT.widgets).forEach((id) => {
+    const def = BB_WIDGETS_DEFAULT.widgets[id];
+    const saved = parsed.widgets?.[id] || {};
+    let col = Math.min(2, Math.max(1, Number(saved.col) || def.col || 1));
+    if (id === 'tv-technical') col = 1;
+    let minH = Number(saved.minH);
+    if (!Number.isFinite(minH) || minH <= 0) minH = def.minH || 0;
+    minH = Math.round(Math.min(960, Math.max(0, minH)));
+    base.widgets[id] = { col, minH, hidden: !!saved.hidden };
+  });
+  return base;
+}
+
 function bbLoadWidgetsLayout() {
   try {
-    const raw = localStorage.getItem(BB_WIDGETS_LAYOUT_KEY);
+    let raw = localStorage.getItem(BB_WIDGETS_LAYOUT_KEY);
+    if (!raw) {
+      for (const legacy of BB_WIDGETS_LAYOUT_LEGACY) {
+        raw = localStorage.getItem(legacy);
+        if (raw) break;
+      }
+    }
     if (!raw) return JSON.parse(JSON.stringify(BB_WIDGETS_DEFAULT));
-    const parsed = JSON.parse(raw);
-    const order = Array.isArray(parsed.order) ? parsed.order : BB_WIDGETS_DEFAULT.order;
-    const widgets = { ...BB_WIDGETS_DEFAULT.widgets, ...(parsed.widgets || {}) };
-    return { order, widgets };
+    return bbNormalizeWidgetsLayout(JSON.parse(raw));
   } catch (_) {
     return JSON.parse(JSON.stringify(BB_WIDGETS_DEFAULT));
   }
@@ -90,7 +136,7 @@ function bbApplyWidgetsLayout() {
   cards.forEach((card) => {
     bbEnsureWidgetBody(card);
     const id = card.dataset.widgetId;
-    const def = BB_WIDGETS_DEFAULT.widgets[id] || { col: 1, minH: 220 };
+    const def = BB_WIDGETS_DEFAULT.widgets[id] || { col: 1, minH: 260 };
     const spec = layout.widgets[id] || def;
     if (spec.hidden) {
       card.hidden = true;
@@ -100,8 +146,9 @@ function bbApplyWidgetsLayout() {
     card.hidden = false;
     card.style.display = '';
     const col = Math.min(maxCol, Math.max(1, spec.col || def.col || 1));
-    const rawH = spec.minH != null ? spec.minH : (def.minH || 0);
-    const minH = Math.round(Math.min(720, Math.max(0, rawH)));
+    let rawH = spec.minH != null ? spec.minH : (def.minH || 0);
+    if (!Number.isFinite(rawH) || rawH <= 0) rawH = def.minH || 260;
+    const minH = Math.round(Math.min(960, Math.max(140, rawH)));
     card.style.gridColumn = `span ${col}`;
     if (minH > 0) card.style.minHeight = `${minH}px`;
     else card.style.minHeight = '';
@@ -201,6 +248,18 @@ function bbRenderWidgetsHiddenTray() {
 
 let _widgetDragId = null;
 
+/** Tarjeta bajo (x,y); no depende de pointer-events del contenido. */
+function bbWidgetCardAtPoint(x, y, exceptId) {
+  const grid = document.getElementById('bbWidgetsGrid');
+  if (!grid) return null;
+  const cards = [...grid.querySelectorAll('.bb-widget-card[data-widget-id]')].filter((c) => {
+    if (exceptId && c.dataset.widgetId === exceptId) return false;
+    const r = c.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  });
+  return cards.length ? cards[cards.length - 1] : null;
+}
+
 function bbBindWidgetsLayoutGrid() {
   const grid = document.getElementById('bbWidgetsGrid');
   const shell = document.getElementById('bbTerminal');
@@ -211,7 +270,8 @@ function bbBindWidgetsLayoutGrid() {
     if (!shell?.classList.contains('bb-layout-edit')) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    const over = e.target.closest('.bb-widget-card');
+    const over = e.target.closest('.bb-widget-card')
+      || bbWidgetCardAtPoint(e.clientX, e.clientY, _widgetDragId);
     grid.querySelectorAll('.bb-widget-card.bb-widget-drop-target').forEach((el) => {
       el.classList.remove('bb-widget-drop-target');
     });
@@ -227,7 +287,8 @@ function bbBindWidgetsLayoutGrid() {
     if (!shell?.classList.contains('bb-layout-edit')) return;
     e.preventDefault();
     const fromId = _widgetDragId || e.dataTransfer.getData('text/widget-id');
-    const target = e.target.closest('.bb-widget-card');
+    const target = e.target.closest('.bb-widget-card')
+      || bbWidgetCardAtPoint(e.clientX, e.clientY, fromId);
     grid.querySelectorAll('.bb-widget-drop-target').forEach((el) => {
       el.classList.remove('bb-widget-drop-target');
     });
@@ -278,6 +339,14 @@ function bbBindWidgetCard(card) {
   });
 
   const grip = chrome.querySelector('.bb-widget-grip');
+  const grid = document.getElementById('bbWidgetsGrid');
+
+  const clearDropTargets = () => {
+    grid?.querySelectorAll('.bb-widget-card.bb-widget-drop-target').forEach((el) => {
+      el.classList.remove('bb-widget-drop-target');
+    });
+  };
+
   grip?.addEventListener('dragstart', (e) => {
     if (!shell?.classList.contains('bb-layout-edit')) {
       e.preventDefault();
@@ -300,19 +369,50 @@ function bbBindWidgetCard(card) {
   });
   card.addEventListener('dragend', () => {
     card.classList.remove('bb-widget-dragging');
+    clearDropTargets();
     _widgetDragId = null;
   });
 
-  resize.addEventListener('mousedown', (e) => {
-    if (!shell?.classList.contains('bb-layout-edit')) return;
+  /* Reordenar con puntero (hit-test por rectángulo; evita iframes y pointer-events) */
+  grip?.addEventListener('pointerdown', (e) => {
+    if (!shell?.classList.contains('bb-layout-edit') || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    grip.setPointerCapture(e.pointerId);
+    card.classList.add('bb-widget-dragging');
+    document.body.classList.add('bb-widget-reordering');
+
+    const onMove = (ev) => {
+      clearDropTargets();
+      const over = bbWidgetCardAtPoint(ev.clientX, ev.clientY, id);
+      if (over) over.classList.add('bb-widget-drop-target');
+    };
+    const onUp = (ev) => {
+      try { grip.releasePointerCapture(ev.pointerId); } catch (_) {}
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      card.classList.remove('bb-widget-dragging');
+      document.body.classList.remove('bb-widget-reordering');
+      const over = bbWidgetCardAtPoint(ev.clientX, ev.clientY, id);
+      clearDropTargets();
+      if (over) bbMoveWidgetInOrder(id, over.dataset.widgetId);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  });
+
+  const startHeightDrag = (e) => {
+    if (!shell?.classList.contains('bb-layout-edit') || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const startY = e.clientY;
-    const base = card.getBoundingClientRect().height;
+    const base = Math.max(card.getBoundingClientRect().height, parseInt(card.style.minHeight, 10) || 0);
     resize.classList.add('bb-dragging');
     document.body.classList.add('bb-resizing');
     const move = (ev) => {
-      const h = Math.round(Math.min(720, Math.max(160, base + (ev.clientY - startY))));
+      const h = Math.round(Math.min(960, Math.max(140, base + (ev.clientY - startY))));
       card.style.minHeight = `${h}px`;
     };
     const up = () => {
@@ -325,6 +425,11 @@ function bbBindWidgetCard(card) {
     };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
+  };
+  resize.addEventListener('mousedown', startHeightDrag);
+  resize.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    startHeightDrag(e);
   });
 }
 
@@ -354,6 +459,7 @@ function bbRefreshWidgetsLayout() {
 
 function setupWidgetsLayout() {
   BB._widgetsLayout = bbLoadWidgetsLayout();
+  bbSaveWidgetsLayout(BB._widgetsLayout);
   bbBindWidgetsLayoutGrid();
   bbRefreshWidgetsLayout();
   let resizeT;

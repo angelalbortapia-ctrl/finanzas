@@ -1577,9 +1577,10 @@
 .bb-widgets-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  align-items: start;
-  grid-auto-rows: min-content;
+  gap: 0.85rem 1rem;
+  align-items: stretch;
+  grid-auto-rows: minmax(0, auto);
+  grid-auto-flow: dense;
 }
 @media (min-width: 1400px) {
   .forge-mode.page-investments .bb-widgets-grid {
@@ -1588,7 +1589,7 @@
   }
 }
 .bb-widget-card {
-  padding: 1rem 1.05rem 1.1rem;
+  padding: 0.85rem 0.95rem 1rem;
   border-radius: 12px;
   border: 1px solid var(--bb-pro-border);
   background: var(--bb-pro-elevated);
@@ -1597,13 +1598,14 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   isolation: isolate;
+  box-sizing: border-box;
 }
 .bb-widget-body {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: visible;
+  overflow: auto;
 }
 .bb-widget-body > h3 {
   flex-shrink: 0;
@@ -1655,6 +1657,8 @@
   display: flex;
   flex-direction: column;
   gap: .5rem;
+  max-height: 360px;
+  overflow-y: auto;
 }
 .bb-w-news-list a {
   display: block;
@@ -1704,6 +1708,8 @@
   line-height: 1.45;
   color: var(--bb-pro-muted);
   margin: 0 0 .5rem;
+  max-height: 12rem;
+  overflow-y: auto;
 }
 .bb-w-profile-link {
   font-size: .72rem;
@@ -1731,17 +1737,17 @@
   font-size: .85rem;
 }
 .bb-tv-embed {
-  height: 425px;
-  min-height: 425px;
-  max-height: 425px;
+  height: 380px;
+  min-height: 380px;
+  max-height: 380px;
   border-radius: 8px;
   overflow: hidden;
   background: #030406;
 }
 .bb-tv-embed--tall {
-  height: 520px;
-  min-height: 520px;
-  max-height: 520px;
+  height: 460px;
+  min-height: 460px;
+  max-height: 460px;
 }
 .bb-widget-tv-tech,
 .bb-widget-tv-info {
@@ -1777,6 +1783,14 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: .5rem;
+}
+.bb-widget-stats .bb-w-stat-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 720px) {
+  .bb-widget-stats .bb-w-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .bb-w-stat {
   padding: .55rem .5rem;
@@ -2128,8 +2142,9 @@
   outline-offset: 2px;
 }
 .bb-layout-edit .bb-widget-card.bb-widget-editable {
-  cursor: grab;
+  cursor: default;
   position: relative;
+  padding-bottom: 1.25rem;
 }
 .bb-widget-chrome-actions {
   display: flex;
@@ -2195,22 +2210,44 @@
 .bb-widget-resize {
   display: none;
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 14px;
+  left: 0.65rem;
+  right: 0.65rem;
+  bottom: 0;
   height: 14px;
-  cursor: nwse-resize;
-  border-right: 2px solid var(--bb-pro-muted);
-  border-bottom: 2px solid var(--bb-pro-muted);
-  opacity: 0.7;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 25;
+  border: none;
+  border-top: 2px dashed rgba(148, 163, 184, 0.45);
+  border-radius: 0 0 10px 10px;
+  background: linear-gradient(to top, rgba(56, 189, 248, 0.12), transparent);
+  opacity: 0.85;
 }
 .bb-layout-edit .bb-widget-resize {
   display: block;
 }
 .bb-layout-edit .bb-widget-resize.bb-dragging,
 .bb-layout-edit .bb-widget-resize:hover {
-  border-color: var(--bb-pro-accent);
+  border-top-color: var(--bb-pro-accent);
   opacity: 1;
+}
+.bb-layout-edit .bb-widget-chrome {
+  position: relative;
+  z-index: 20;
+}
+#bbTerminal.bb-layout-edit .bb-widget-card.bb-widget-editable .bb-tv-embed,
+#bbTerminal.bb-layout-edit .bb-widget-card.bb-widget-editable iframe {
+  pointer-events: none;
+}
+#bbTerminal.bb-layout-edit .bb-widget-card.bb-widget-editable .bb-widget-body a {
+  pointer-events: none;
+}
+body.bb-widget-reordering {
+  user-select: none;
+  cursor: grabbing;
+}
+body.bb-widget-reordering .bb-widget-grip {
+  cursor: grabbing;
 }
 .bb-widgets-edit-hint {
   display: none;
@@ -2275,9 +2312,9 @@
   flex: 0 0 auto !important;
   width: 100% !important;
   height: auto !important;
-  max-height: var(--bb-invest-workspace-max) !important;
+  max-height: none !important;
   min-height: 0 !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   box-shadow: none !important;
   isolation: auto !important;
 }
@@ -2313,14 +2350,14 @@
   }
   .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-rail {
     grid-area: rail;
-    min-height: 0 !important;
-    height: 100% !important;
-    max-height: 100% !important;
+    min-height: var(--bb-invest-chart-row-min, min(56vh, 600px)) !important;
+    height: auto !important;
+    max-height: none !important;
     overflow: hidden !important;
   }
   .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-chart-area {
-    min-height: 0 !important;
-    max-height: 100% !important;
+    min-height: var(--bb-invest-chart-row-min, min(56vh, 600px)) !important;
+    max-height: none !important;
     overflow: hidden !important;
   }
   .forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
@@ -2455,7 +2492,7 @@
 }
 .forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
   flex: 1 1 auto !important;
-  min-height: min(var(--bb-chart-body-min), calc(var(--bb-invest-workspace-max) - 11.5rem)) !important;
+  min-height: calc(var(--bb-invest-chart-row-min, min(56vh, 600px)) - 10rem) !important;
 }
 @media (min-width: 1180px) {
   .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
@@ -2491,6 +2528,49 @@
 .forge-mode.page-investments .bb-shell--scroll .bb-panel-head--watch h2 {
   font-size: 0.72rem;
   letter-spacing: 0.1em;
+}
+
+/* Watchlist — filas más compactas */
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-row,
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-row-wrap .bb-watch-row {
+  grid-template-columns: 1.15rem minmax(3rem, 4rem) minmax(0, 1fr) auto;
+  gap: 0.32rem 0.4rem;
+  padding: 0.42rem 0.55rem !important;
+  margin-bottom: 3px !important;
+  min-height: 34px;
+  font-size: 0.7rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-sym {
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-name {
+  font-size: 0.65rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-price {
+  font-size: 0.72rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-chg {
+  font-size: 0.66rem;
+  min-width: 2.75rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-logo-wrap {
+  width: 1.2rem;
+  height: 1.2rem;
+  min-width: 1.2rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-divider {
+  font-size: 0.62rem;
+  padding: 0.35rem 0.55rem 0.2rem;
+  margin-top: 0.25rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-search {
+  padding: 0.45rem 0.6rem !important;
+  font-size: 0.72rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-watch-tab {
+  padding: 0.28rem 0.45rem;
+  font-size: 0.64rem;
 }
 
 /* ═══ Modo Ajustar: misma señal visual arriba (splitters) y abajo (widgets) ═══ */
@@ -2539,4 +2619,603 @@
 .forge-mode.page-investments .bb-workspace-edit-hint strong {
   font-weight: 700;
   color: #e2e8f0;
+}
+
+/* Paneles superiores — mismo chrome que widgets en modo Ajustar */
+.bb-workspace-panel-chrome {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem 0.45rem 0.5rem;
+  border-bottom: 1px dashed rgba(56, 189, 248, 0.35);
+}
+#bbTerminal.bb-layout-edit .bb-workspace-panel-editable > .bb-workspace-panel-chrome {
+  display: flex;
+}
+.bb-workspace-grip {
+  cursor: grab;
+  color: var(--bb-pro-muted);
+  font-size: 0.85rem;
+  letter-spacing: -0.15em;
+  user-select: none;
+  padding: 0.15rem 0.35rem;
+  touch-action: none;
+}
+.bb-workspace-panel-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bb-pro-accent);
+  flex: 1 1 auto;
+}
+.bb-workspace-panel-title--solo {
+  flex: 0 1 auto;
+}
+.bb-workspace-panel-hint {
+  font-size: 0.65rem;
+  color: var(--bb-pro-muted);
+  margin-left: auto;
+}
+.bb-workspace-swap-btn {
+  border: 1px solid var(--bb-pro-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--bb-pro-muted);
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.bb-workspace-swap-btn:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: var(--bb-pro-accent);
+}
+.bb-workspace-panel.bb-workspace-panel-dragging {
+  opacity: 0.65;
+  outline: 2px solid var(--bb-pro-accent);
+  outline-offset: 2px;
+}
+.bb-workspace-panel.bb-workspace-panel-drop {
+  outline: 2px dashed var(--bb-pro-accent);
+  outline-offset: 3px;
+}
+#bbTerminal.bb-layout-edit .bb-workspace-pane > .bb-chart-area,
+#bbTerminal.bb-layout-edit #bbRail > .bb-watch,
+#bbTerminal.bb-layout-edit #bbRail .bb-info-detail {
+  outline: 1px dashed rgba(56, 189, 248, 0.35);
+  outline-offset: 2px;
+}
+#bbTerminal.bb-layout-edit #bbRail.bb-rail-edit {
+  outline: none;
+}
+#bbTerminal.bb-layout-edit #bbRail > .bb-watch.bb-workspace-panel-editable > .bb-panel-head {
+  display: none;
+}
+#bbTerminal.bb-layout-edit #bbChartWrap,
+#bbTerminal.bb-layout-edit #bbVolChart {
+  pointer-events: none;
+}
+#bbTerminal.bb-layout-edit .bb-chart-stack > #bbResizeChart {
+  pointer-events: auto;
+  z-index: 40;
+}
+
+/* Splitters del rail en scroll: en flujo flex (no absolute) para poder arrastrar */
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-rail > #bbResizeRailWatch {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  margin: -3px 0;
+  flex: 0 0 10px;
+  width: 100%;
+  align-self: stretch;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-workspace-pane > #bbResizeInfo {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(58% - 5px);
+  width: 12px;
+  margin-left: 0;
+  z-index: 50;
+  transform: none;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll.bb-layout-edit .bb-workspace-pane > #bbResizeInfo {
+    left: calc(100% - var(--bb-rail-w, 420px) - 6px);
+  }
+}
+
+/* Layout v4: watchlist = rail completo · estadísticas bajo gráfica a ancho completo */
+.forge-mode.page-investments .bb-shell--scroll .bb-rail-watch-slot {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: 100% !important;
+}
+.forge-mode.page-investments .bb-shell--scroll #bbResizeRailWatch,
+.forge-mode.page-investments .bb-shell--scroll .bb-info-panel--rail-extra {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-key-stats-panel {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0.15rem 0 0;
+  border-radius: 16px;
+  border: 1px solid var(--bb-pro-border);
+  background: var(--bb-pro-surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-key-stats-panel .bb-info-detail {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-detail-hero--wide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin: 0 1rem 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: var(--bb-pro-elevated);
+  border: 1px solid var(--bb-pro-border);
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-detail-hero--wide .bb-detail-hero-main {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-detail-hero--wide .bb-detail-hero-quote {
+  flex: 0 1 auto;
+  text-align: right;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-key-stats-panel .bb-stats--detail {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0 1rem 1rem;
+}
+@media (max-width: 960px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-key-stats-panel .bb-stats--detail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.bb-main:not(.bb-view-market) #bbKeyStatsPanel {
+  display: none !important;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+    grid-template-areas:
+      "hint hint"
+      "chart rail"
+      "stats stats";
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-edit-hint {
+    grid-area: hint;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-chart-area {
+    grid-area: chart;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > .bb-rail {
+    grid-area: rail;
+  }
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane > #bbKeyStatsPanel {
+    grid-area: stats;
+  }
+}
+@media (max-width: 1179px) {
+  .forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+    grid-template-areas:
+      "hint"
+      "chart"
+      "rail"
+      "stats";
+  }
+}
+#bbTerminal.bb-layout-edit #bbKeyStatsPanel.bb-workspace-panel-editable > .bb-info-detail > .bb-pane-subhead {
+  display: none;
+}
+#bbTerminal.bb-layout-edit #bbKeyStatsPanel.bb-workspace-panel-editable {
+  outline: 1px dashed rgba(56, 189, 248, 0.35);
+  outline-offset: 2px;
+}
+
+/* ═══ Barra lateral de herramientas (toda la página) ═══ */
+.forge-mode.page-investments {
+  --bb-tool-rail-icons-w: 52px;
+  --bb-tool-rail-drawer-w: 272px;
+}
+.forge-mode.page-investments .bb-tool-rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
+  z-index: 40;
+  background: linear-gradient(180deg, #0a0c10 0%, #050608 100%);
+  border-right: 1px solid rgba(56, 189, 248, 0.18);
+  box-shadow: 4px 0 28px rgba(0, 0, 0, 0.45);
+}
+.forge-mode.page-investments .bb-tool-rail-icons {
+  flex: 0 0 var(--bb-tool-rail-icons-w);
+  width: var(--bb-tool-rail-icons-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.65rem 0 0.5rem;
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.02));
+  border-right: 1px solid rgba(56, 189, 248, 0.15);
+}
+.forge-mode.page-investments .bb-tool-rail-icon {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #94a3b8;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.forge-mode.page-investments .bb-tool-rail-icon:hover {
+  color: #e2e8f0;
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.1);
+}
+.forge-mode.page-investments .bb-tool-rail-icon.active {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.65);
+  background: rgba(56, 189, 248, 0.16);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25), 0 8px 20px rgba(56, 189, 248, 0.12);
+}
+.forge-mode.page-investments .bb-tool-rail-icon--hide {
+  margin-bottom: 0.15rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: -0.08em;
+  color: #64748b;
+}
+.forge-mode.page-investments .bb-tool-rail-icon--hide:hover {
+  color: #f1f5f9;
+}
+.forge-mode.page-investments .bb-tool-rail-icon--help {
+  margin-top: auto;
+  margin-bottom: 0.35rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.forge-mode.page-investments .bb-terminal-app.bb-tool-rail-hidden .bb-tool-rail {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-tool-rail-reveal {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 55;
+  width: 28px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.22), rgba(10, 12, 16, 0.96));
+  color: #38bdf8;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.45);
+  transition: width 0.15s ease, background 0.15s ease;
+}
+.forge-mode.page-investments .bb-tool-rail-reveal:hover {
+  width: 34px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.35), rgba(10, 12, 16, 0.98));
+  color: #e0f2fe;
+}
+.forge-mode.page-investments .bb-tool-rail-reveal[hidden] {
+  display: none !important;
+}
+.forge-mode.page-investments .bb-tool-rail-drawer {
+  flex: 0 0 var(--bb-tool-rail-drawer-w);
+  width: var(--bb-tool-rail-drawer-w);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  transition: width 0.22s ease, opacity 0.2s ease, flex-basis 0.22s ease;
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.95), rgba(5, 6, 8, 0.98));
+}
+.forge-mode.page-investments .bb-terminal-app:not(.bb-tool-rail-open) .bb-tool-rail-drawer {
+  flex: 0 0 0;
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+}
+.forge-mode.page-investments .bb-tool-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem 0.55rem;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.12);
+}
+.forge-mode.page-investments .bb-tool-rail-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+}
+.forge-mode.page-investments .bb-tool-rail-pin {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(0, 0, 0, 0.3);
+  color: #94a3b8;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.forge-mode.page-investments .bb-tool-rail-pin:hover {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+.forge-mode.page-investments .bb-terminal-app:not(.bb-tool-rail-open) .bb-tool-rail-pin {
+  transform: rotate(180deg);
+}
+.forge-mode.page-investments .bb-tool-rail-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.65rem 0.75rem 1rem;
+}
+.forge-mode.page-investments .bb-tool-rail-lead {
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--bb-pro-muted, #64748b);
+}
+.forge-mode.page-investments .bb-tool-rail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+.forge-mode.page-investments .bb-tool-rail-grid--tight {
+  gap: 0.4rem;
+}
+.forge-mode.page-investments .bb-trail-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(0, 0, 0, 0.28);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.forge-mode.page-investments .bb-trail-action:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.1);
+  color: #7dd3fc;
+}
+.forge-mode.page-investments .bb-trail-action--wide {
+  width: 100%;
+  margin-bottom: 0.45rem;
+  justify-content: flex-start;
+  padding-left: 0.75rem;
+}
+.forge-mode.page-investments .bb-trail-action kbd {
+  margin-left: auto;
+  font-size: 0.62rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #94a3b8;
+  font-family: var(--bb-mono, ui-monospace, monospace);
+}
+@media (max-width: 960px) {
+  .forge-mode.page-investments .bb-tool-rail {
+    position: fixed;
+    left: 0;
+    top: calc(var(--bb-chrome-h, 44px) + var(--bb-ticker-fixed-h, 42px) + var(--bb-ws-tabs-h, 3rem));
+    bottom: var(--bb-news-bar-h, 48px);
+    height: auto;
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.55);
+  }
+  .forge-mode.page-investments .bb-terminal-app:not(.bb-tool-rail-open) .bb-tool-rail-drawer {
+    width: 0;
+  }
+  .forge-mode.page-investments .bb-terminal-app.bb-tool-rail-open .bb-tool-rail-drawer {
+    width: min(280px, 78vw);
+    flex-basis: min(280px, 78vw);
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ═══ Layout v5: más aire — fila gráfica+watch con altura mínima; stats compacta abajo ═══ */
+.forge-mode.page-investments .bb-shell--scroll {
+  --bb-invest-chart-row-min: min(56vh, 600px);
+  --bb-chart-body-min: min(42vh, 480px);
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-workspace-pane {
+  align-items: stretch !important;
+  gap: 1rem 1.25rem !important;
+  max-width: min(1680px, 100%) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: 0 0.65rem !important;
+  box-sizing: border-box !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-head {
+  padding: 0.75rem 1rem 0.65rem !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-toolbar--pro {
+  padding: 0.55rem 1rem 0.65rem !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-stack {
+  margin: 0 0.75rem 0.85rem !important;
+  min-height: calc(var(--bb-invest-chart-row-min) - 10rem) !important;
+  max-height: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-chart-container {
+  min-height: 220px !important;
+}
+.forge-mode.page-investments .bb-shell--scroll #bbChart {
+  min-height: 200px !important;
+}
+.forge-mode.page-investments .bb-shell--scroll #bbKeyStatsPanel {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  max-height: none !important;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-key-stats-panel .bb-panel-body {
+  padding-bottom: 0.5rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-key-stats-panel .bb-detail-hero--wide {
+  margin-bottom: 0.5rem;
+  padding: 0.65rem 0.85rem;
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-key-stats-panel .bb-stats--detail {
+  margin-bottom: 0.65rem;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll:not(.bb-watch-in-tool-rail) .bb-workspace-pane {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, min(400px, 30vw)) !important;
+    align-items: stretch !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll:not(.bb-watch-in-tool-rail) .bb-workspace-pane > .bb-chart-area,
+  .forge-mode.page-investments .bb-shell--scroll:not(.bb-watch-in-tool-rail) .bb-workspace-pane > .bb-rail {
+    align-self: stretch !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll:not(.bb-watch-in-tool-rail) .bb-rail-watch-slot {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+}
+.forge-mode.page-investments .bb-shell--scroll .bb-invest-widgets-scroll > .bb-widgets-deck--bottom {
+  max-width: min(1680px, 100%);
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+  box-sizing: border-box;
+}
+
+/* ═══ Watchlist en barra lateral · gráfica a ancho completo ═══ */
+.forge-mode.page-investments .bb-terminal-app.bb-tool-rail-panel-watch {
+  --bb-tool-rail-drawer-w: 304px;
+}
+.forge-mode.page-investments .bb-terminal-app.bb-tool-rail-panel-watch .bb-tool-rail-panels {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.forge-mode.page-investments .bb-tool-rail-panel[data-trail-panel="watch"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.forge-mode.page-investments .bb-tool-rail-watch {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.forge-mode.page-investments .bb-tool-rail-watch .bb-watch {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+.forge-mode.page-investments .bb-tool-rail-watch .bb-panel-head--watch {
+  padding: 0.45rem 0.65rem 0.4rem;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+}
+.forge-mode.page-investments .bb-tool-rail-watch .bb-panel-head--watch h2 {
+  font-size: 0.78rem;
+}
+.forge-mode.page-investments .bb-tool-rail-watch .bb-watch-search {
+  margin: 0.45rem 0.55rem 0.35rem;
+  flex-shrink: 0;
+}
+.forge-mode.page-investments .bb-tool-rail-watch .bb-watch-tabs {
+  flex-shrink: 0;
+  padding: 0 0.4rem 0.35rem;
+  gap: 0.2rem;
+}
+.forge-mode.page-investments .bb-tool-rail-watch .bb-watch-tab {
+  padding: 0.2rem 0.35rem;
+  font-size: 0.62rem;
+}
+.forge-mode.page-investments .bb-tool-rail-watch #bbWatchlist {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0.35rem 0.55rem;
+  -webkit-overflow-scrolling: touch;
+}
+.forge-mode.page-investments .bb-tool-rail-watch .bb-watch-row {
+  padding: 0.35rem 0.4rem;
+}
+#bbTerminal.bb-layout-edit .bb-tool-rail-watch.bb-workspace-panel-editable {
+  outline: 1px dashed rgba(56, 189, 248, 0.35);
+  outline-offset: 2px;
+}
+#bbTerminal.bb-layout-edit .bb-tool-rail-watch .bb-watch.bb-workspace-panel-editable > .bb-panel-head {
+  display: none;
+}
+
+.forge-mode.page-investments .bb-shell--scroll.bb-watch-in-tool-rail .bb-workspace-pane {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas:
+    "hint"
+    "chart"
+    "stats" !important;
+}
+@media (min-width: 1180px) {
+  .forge-mode.page-investments .bb-shell--scroll.bb-watch-in-tool-rail .bb-workspace-pane {
+    grid-template-areas:
+      "hint"
+      "chart"
+      "stats" !important;
+  }
+  .forge-mode.page-investments .bb-shell--scroll.bb-watch-in-tool-rail .bb-workspace-pane > .bb-chart-area,
+  .forge-mode.page-investments .bb-shell--scroll.bb-watch-in-tool-rail .bb-workspace-pane > #bbKeyStatsPanel {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-watch-in-tool-rail.bb-shell--tv .bb-main.bb-view-portfolio {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-areas: "port" !important;
+}
+.forge-mode.page-investments .bb-shell--scroll.bb-watch-in-tool-rail .bb-main.bb-view-portfolio .bb-portfolio-panel {
+  grid-column: 1 / -1;
+  width: 100%;
 }

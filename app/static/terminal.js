@@ -394,6 +394,14 @@ function renderWidgets(data, forSymbol, widgetsLoadId) {
     </tbody></table></div>` : '<p class="bb-widget-foot">Sin historial de pagos en Yahoo.</p>'}
   </article>`;
 
+  const tv = data.tradingview;
+  if (tv?.tv_symbol && (tv.applicable || tv.embed_ok)) {
+    html += `<article class="bb-widget-card bb-widget-tv-tech" data-widget-id="tv-technical">
+      <h3>Análisis técnico <span class="bb-widget-tag bb-widget-tag--tv">TradingView</span></h3>
+      <div class="bb-tv-embed" id="bbTvTechEmbed" data-tv-symbol="${escHtml(tv.tv_symbol)}"></div>
+    </article>`;
+  }
+
   if (qTrends?.revenue?.length) {
     const rev = qTrends.revenue.slice(-4);
     const periods = rev.map(r => r.period);
@@ -460,7 +468,6 @@ function renderWidgets(data, forSymbol, widgetsLoadId) {
     </article>`;
   }
 
-  const tv = data.tradingview;
   if (tv?.metrics?.length) {
     html += `<article class="bb-widget-card bb-widget-tv-scan" data-widget-id="tv-scan">
       <h3>Técnico <span class="bb-widget-tag bb-widget-tag--tv">TradingView</span></h3>
@@ -472,10 +479,6 @@ function renderWidgets(data, forSymbol, widgetsLoadId) {
   }
 
   if (tv?.tv_symbol && (tv.applicable || tv.embed_ok)) {
-    html += `<article class="bb-widget-card bb-widget-tv-tech" data-widget-id="tv-technical">
-      <h3>Análisis técnico <span class="bb-widget-tag bb-widget-tag--tv">TradingView</span></h3>
-      <div class="bb-tv-embed" id="bbTvTechEmbed" data-tv-symbol="${escHtml(tv.tv_symbol)}"></div>
-    </article>`;
     if (tv.embed_ok !== false && !String(tv.tv_symbol).startsWith('BMV:')) {
       html += `<article class="bb-widget-card bb-widget-tv-info" data-widget-id="tv-symbol">
         <h3>Ficha <span class="bb-widget-tag bb-widget-tag--tv">TradingView</span></h3>
@@ -516,7 +519,7 @@ function mountTradingViewEmbeds(tvSymbol, widgetsLoadId, forSymbol) {
   load(techHost, 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js', {
     interval: '1D',
     width: '100%',
-    height: 425,
+    height: 380,
     isTransparent: true,
     showIntervalTabs: true,
     locale: 'es',
@@ -524,7 +527,7 @@ function mountTradingViewEmbeds(tvSymbol, widgetsLoadId, forSymbol) {
   });
   load(symHost, 'https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js', {
     width: '100%',
-    height: 520,
+    height: 460,
     locale: 'es',
     colorTheme: 'dark',
     isTransparent: true,
@@ -533,7 +536,6 @@ function mountTradingViewEmbeds(tvSymbol, widgetsLoadId, forSymbol) {
 
 async function loadWidgets(symbol, opts = {}) {
   const reqSym = bbNormSym(symbol || BB.symbol);
-  const loadId = opts.loadId != null ? opts.loadId : BB._widgetsLoadId;
   if (!isWidgetsWorkspace()) {
     hideWidgetsDeck();
     return;
@@ -546,22 +548,47 @@ async function loadWidgets(symbol, opts = {}) {
     resetWidgetsForSymbol(reqSym);
   }
   const activeLoadId = BB._widgetsLoadId;
+  deck.classList.add('bb-widgets-loading');
   if (status) status.textContent = `Cargando ${reqSym}…`;
+
+  const isCurrent = () => activeLoadId === BB._widgetsLoadId && reqSym === bbNormSym(BB.symbol);
+  const endLoading = () => {
+    if (!isCurrent()) return;
+    deck.classList.remove('bb-widgets-loading');
+  };
+
   try {
     const res = await fetch(
       `/api/terminal/widgets?symbol=${encodeURIComponent(reqSym)}&v=${activeLoadId}`,
       { cache: 'no-store' },
     );
-    if (activeLoadId !== BB._widgetsLoadId || reqSym !== bbNormSym(BB.symbol)) return;
-    const data = await res.json();
-    if (activeLoadId !== BB._widgetsLoadId || reqSym !== bbNormSym(BB.symbol)) return;
-    if (data.symbol && bbNormSym(data.symbol) !== reqSym) return;
-    renderWidgets(data, reqSym, activeLoadId);
-  } catch (_) {
-    deck.classList.remove('bb-widgets-loading');
-    if (activeLoadId === BB._widgetsLoadId && reqSym === bbNormSym(BB.symbol) && status) {
-      status.textContent = 'Error al cargar widgets';
+    if (!isCurrent()) return;
+    if (!res.ok) {
+      endLoading();
+      if (status) {
+        status.textContent = res.status === 401
+          ? 'Sesión expirada — recarga e inicia sesión'
+          : `Error ${res.status} al cargar indicadores`;
+      }
+      return;
     }
+    const data = await res.json();
+    if (!isCurrent()) return;
+    if (data.symbol && bbNormSym(data.symbol) !== reqSym) {
+      endLoading();
+      if (status) status.textContent = 'Indicadores no coinciden con la emisora';
+      return;
+    }
+    try {
+      renderWidgets(data, reqSym, activeLoadId);
+    } catch (err) {
+      console.error('renderWidgets', err);
+      endLoading();
+      if (status) status.textContent = 'Error al mostrar indicadores';
+    }
+  } catch (_) {
+    endLoading();
+    if (isCurrent() && status) status.textContent = 'Error al cargar widgets';
   }
 }
 
@@ -1306,20 +1333,19 @@ async function loadSymbol(symbol, period) {
 
     const quoteRes = await fetch(`/api/terminal/quote?symbol=${encodeURIComponent(reqSym)}`);
     if (loadId !== BB._loadId || reqSym !== BB.symbol) return;
-    if (!quoteRes.ok) return;
+    if (!quoteRes.ok) {
+      if (statusEl) {
+        statusEl.textContent = quoteRes.status === 401
+          ? 'Sesión expirada — recarga e inicia sesión'
+          : `No se pudo cargar cotización (${quoteRes.status})`;
+      }
+      updateSymbolHeader({ symbol: reqSym, error: true }, chartData);
+      return;
+    }
     const quote = await quoteRes.json();
     updateSymbolHeader(quote, chartData);
 
-    fetch(`/api/terminal/news?limit=10&symbol=${encodeURIComponent(reqSym)}`)
-      .then(r => r.json())
-      .then(news => {
-        if (loadId !== BB._loadId || reqSym !== BB.symbol) return;
-        renderNews(news.items || [], reqSym);
-        const newsTag = document.getElementById('bbNewsTag');
-        if (newsTag) newsTag.textContent = reqSym;
-        scheduleNewsTickerRefresh();
-      })
-      .catch(() => {});
+    scheduleNewsTickerRefresh();
 
     document.querySelectorAll('.bb-watch-row').forEach(r => {
       r.classList.toggle('active', r.dataset.symbol === BB.symbol);
@@ -1342,18 +1368,6 @@ async function loadSymbol(symbol, period) {
   } finally {
     if (loadId === BB._loadId) setChartLoading(false);
   }
-}
-
-function renderNews(items, forSymbol) {
-  const el = document.getElementById('bbNews');
-  if (!el) return;
-  if (forSymbol && bbNormSym(forSymbol) !== bbNormSym(BB.symbol)) return;
-  el.innerHTML = (items || []).map(n => `
-    <a href="${safeHttpUrl(n.url)}" class="bb-news-item bb-enter" target="_blank" rel="noopener noreferrer">
-      <div class="bb-news-meta">${escHtml((n.published_at || '').slice(0, 16).replace('T', ' '))} · ${escHtml(n.publisher)}</div>
-      <div class="bb-news-title">${escHtml(n.title)}</div>
-    </a>`).join('') || '<p style="padding:.5rem;color:var(--bb-muted)">Sin noticias</p>';
-  staggerChildren(el, '.bb-news-item', 'bb-enter');
 }
 
 function logoSrc(symbol) {
@@ -2813,6 +2827,12 @@ function initBloombergTerminal(config) {
 
   setupPriceAlerts();
   document.getElementById('bbTerminal')?.classList.add('bb-ready');
+  if (typeof bbSyncWatchRailAlign === 'function') {
+    requestAnimationFrame(() => {
+      bbSyncWatchRailAlign();
+      setTimeout(bbSyncWatchRailAlign, 150);
+    });
+  }
   setupChartResizeObserver();
   const reflowCharts = () => {
     if (typeof resizeAllCharts === 'function') resizeAllCharts();
